@@ -1,0 +1,14 @@
+{
+  "name": "opcua",
+  "version": "5.0.0",
+  "description": "opcua client",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Intra LLC",
+  "license": "MIT",
+  "dependencies": {
+    "node-opcua": "^2.47.0"
+  }
+}
