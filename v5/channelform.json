@@ -5,9 +5,10 @@
   "spacing": 4,
 
   "p2": [
-    { "prop": "browseName", "title": "Name", "type": "input" },  
+    { "prop": "displayName", "title": "Name", "type": "input" },  
     { "prop": "chan", "title": "Node ID", "type": "text" },  
-    { "prop": "dataType", "title": "Data type", "type": "text" },  
+    { "prop": "dataType", "title": "Data type", "type": "text" }, 
+    { "prop": "accessLevel", "title": "Access Level", "type": "text" },  
   
     { "prop": "r", "title": "Чтение", "type": "cb" },
     { "prop": "w", "title": "Запись", "type": "cb" }
