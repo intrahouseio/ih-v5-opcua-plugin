@@ -6,10 +6,11 @@
 
   "channel_folder_popup": {
     "add":[
-      { "id": "folder", "title": "$NewFolder" }
+      { "id": "folder", "title": "$NewFolder" },
+      { "id": "channel", "title": "$NewChannel" }
     ],
     "browse":{"variant":"subtree"},
-    "copypaste":false,
+    "copypaste":true,
     "delete":true
   }
 }

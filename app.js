@@ -56,16 +56,11 @@ module.exports = async function (plugin) {
           `Backoff ", ${retry}, " next attempt in ", ${delay}, "ms"`,
           0
         );
-        process.on("SIGTERM", () => {
-          process.exit(0);
-        });
+        plugin.exit();
       });
 
       client.on("connection_lost", () => {
-        plugin.log("Connection lost", 0);
-        process.on("SIGTERM", () => {
-          process.exit(0);
-        });
+        plugin.exit();
       });
 
       client.on("connection_reestablished", () => {
@@ -152,7 +147,8 @@ module.exports = async function (plugin) {
           monitorItem.itemToMonitor.nodeId.namespace +
           ";s=" +
           monitorItem.itemToMonitor.nodeId.value;
-        plugin.sendData([{ id: chanId, value: dataValue.value.value }]);
+          //plugin.log("Statuscode" + util.inspect(dataValue.statusCode._value));
+        plugin.sendData([{ id: chanId, value: dataValue.value.value, chstatus:dataValue.statusCode._value }]);
         //console.log(" value has changed : ", chanId, "  ", dataValue.value.value);
       });
     } catch (err) {
@@ -161,6 +157,7 @@ module.exports = async function (plugin) {
   }
 
   async function write(data) {
+    plugin.log(util.inspect(data) );
     data.data.forEach((element) =>
       session.write(
         {
@@ -169,7 +166,7 @@ module.exports = async function (plugin) {
           value: {
             value: {
               dataType: DataType[element.dataType],
-              value: element.value,
+              value: element.dataType == 'Boolean' ? element.value == 0 ? false : true :  element.value,
             },
           },
         },

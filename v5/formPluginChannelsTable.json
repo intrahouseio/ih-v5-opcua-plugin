@@ -19,7 +19,8 @@
         { "prop": "realtime_dev_val", "title": "Устройство: значение", "type": "text",  "width": 64 },
         { "prop": "realtime_dev_ts", "title": "Устройство: время", "type": "text",  "width": 150 },
         { "prop": "realtime_dev_cts", "title": "Изменение", "type": "text",  "width": 150 },
-        { "prop": "realtime_dev_err", "title": "Ошибка", "type": "text",  "width": 150 }
+        { "prop": "realtime_dev_err", "title": "Ошибка", "type": "text",  "width": 150 },
+        { "prop": "realtime_chan_chstatus", "title": "Канал: статус", "type": "text", "width": 150 }
 
 
       ]

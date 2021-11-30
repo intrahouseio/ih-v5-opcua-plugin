@@ -41,6 +41,12 @@
       "type": "password",
       "default": "password",
       "hide": "!data.p2.use_password"
+    },
+    {
+      "prop": "restarttime",
+      "title": "$Unit_Restarttime",
+      "type": "number",
+      "default": 5
     }
   ],
 
