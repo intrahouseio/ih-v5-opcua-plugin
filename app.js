@@ -79,16 +79,24 @@ module.exports = async function (plugin) {
       });
 
       // step 1 : connect to
+
       await client.connect(endpointUrl);
       plugin.log("connected !", 0);
 
       // step 2 : createSession
-      session = await client.createSession({
-        userName: userName,
-        password: password,
-      });
-
+      /**/
+      if (use_password) {
+        session = await client.createSession({
+          userName: userName,
+          password: password,
+        });
+        plugin.log("connected !", 0);
+      } else {
+        session = await client.createSession({
+        });
+      }
       plugin.log("session created !", 0);
+      
     } catch (err) {
       plugin.log("An error has occured : ", err);
     }
@@ -142,13 +150,28 @@ module.exports = async function (plugin) {
       );
 
       monitoredItem.on("changed", (monitorItem, dataValue) => {
-        let chanId =
-          "ns=" +
-          monitorItem.itemToMonitor.nodeId.namespace +
-          ";s=" +
-          monitorItem.itemToMonitor.nodeId.value;
-          //plugin.log("Statuscode" + util.inspect(dataValue.statusCode._value));
-        plugin.sendData([{ id: chanId, value: dataValue.value.value, chstatus:dataValue.statusCode._value }]);
+        let identifierString;
+        switch (monitorItem.itemToMonitor.nodeId.identifierType) {
+          case 1: identifierString = ';i='; break;
+          case 2: identifierString = ';s='; break;
+          case 3: identifierString = ';g='; break;
+          case 4: identifierString = ';b='; break;
+          default: identifierString = String(monitorItem.itemToMonitor.nodeId.identifierType); break;
+        }
+        let chanId
+        if (identifierString == ';b=') {
+          chanId = "ns=" +
+            monitorItem.itemToMonitor.nodeId.namespace +
+            identifierString +
+            monitorItem.itemToMonitor.nodeId.value.toString('base64');
+        } else {
+          chanId = "ns=" +
+            monitorItem.itemToMonitor.nodeId.namespace +
+            identifierString +
+            monitorItem.itemToMonitor.nodeId.value;
+        }
+        //plugin.log("Statuscode" + util.inspect(dataValue.statusCode._value));
+        plugin.sendData([{ id: chanId, value: dataValue.value.value, chstatus: dataValue.statusCode._value }]);
         //console.log(" value has changed : ", chanId, "  ", dataValue.value.value);
       });
     } catch (err) {
@@ -157,7 +180,7 @@ module.exports = async function (plugin) {
   }
 
   async function write(data) {
-    plugin.log(util.inspect(data) );
+    plugin.log(util.inspect(data));
     data.data.forEach((element) =>
       session.write(
         {
@@ -166,7 +189,7 @@ module.exports = async function (plugin) {
           value: {
             value: {
               dataType: DataType[element.dataType],
-              value: element.dataType == 'Boolean' ? element.value == 0 ? false : true :  element.value,
+              value: element.dataType == 'Boolean' ? element.value == 0 ? false : true : element.value,
             },
           },
         },
@@ -202,7 +225,7 @@ module.exports = async function (plugin) {
   });
 
   process.on("SIGTERM", () => {
-    process.exit(0);
+    plugin.exit();
   });
 };
 
