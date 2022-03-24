@@ -98,7 +98,7 @@ module.exports = async function (plugin) {
       plugin.log("session created !", 0);
       
     } catch (err) {
-      plugin.log("An error has occured : ", err);
+      plugin.log("An error has occured : " + util.inspect(err));
     }
   }
 
