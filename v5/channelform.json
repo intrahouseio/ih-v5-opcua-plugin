@@ -1,7 +1,8 @@
 {
   "grid": [
     { "id": "p2", "xs": 12, "class": "main", "table": "devhard" },
-    { "id": "p9", "xs": 12, "class": "main", "table": "onechannelrtTable"}
+    { "id": "p9", "xs": 12, "class": "main", "table": "onechannelrtTable"},
+    { "id": "ptest", "xs": 12, "class": "main", "table": "devhard", "hide": "!data.p2.w" }
   ],
   "spacing": 4,
 
@@ -16,6 +17,18 @@
     { "prop": "calc", "title": "$Devhard_Calc", "type": "input", "hide": "!data.p2.r" },
     { "prop": "w", "title": "Запись", "type": "cb" },
     { "prop": "calc_out", "title": "$Devhard_Calc_Out", "type": "input", "hide": "!data.p2.w" }
+  ],
+  "ptest": [
+    { "prop": "header_testwrite", "title": "Header_testwrite", "type": "header" },
+    { "prop": "testValue", "title": "TestValue", "type": "input" },
+
+    {
+      "prop": "writeButton",
+      "title": "DoWrite",
+      "type": "button",
+      "command": "writetochannel",
+      "param": "write"
+    }
   ],
   "p9": [
     { "prop": "realtime_chan_str", "title": "Канал", "type": "text" },

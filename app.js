@@ -186,7 +186,7 @@ module.exports = async function (plugin) {
           value: {
             value: {
               dataType: DataType[element.dataType],
-              value: element.dataType == 'Boolean' || 'Bool' ? element.value == 0 ? false : true : element.value,
+              value: element.dataType == ('Boolean' || 'Bool') ? element.value == 0 ? false : true : element.value,
             },
           },
         },
