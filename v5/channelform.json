@@ -8,8 +8,8 @@
   "p2": [
     { "prop": "title", "title": "Name", "type": "input" },  
     { "prop": "devpropname", "title": "Свойство для привязки", "type": "input" },
-    { "prop": "chan", "title": "Node ID", "type": "text" },  
-    { "prop": "dataType", "title": "Data type", "type": "text" }, 
+    { "prop": "chan", "title": "Node ID", "type": "input" },  
+    { "prop": "dataType", "title": "Data type", "type": "input" }, 
     { "prop": "accessLevel", "title": "Access Level", "type": "text" },  
   
     { "prop": "r", "title": "Чтение", "type": "cb" },

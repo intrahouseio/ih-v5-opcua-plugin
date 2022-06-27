@@ -8,17 +8,10 @@
   "spacing": 10,
   "p1": [
     {
-      "prop": "host",
-      "title": "Host",
+      "prop": "endpointUrl",
+      "title": "Endpoint URL",
       "type": "input",
-      "default": "192.168.0.250"
-    },
-
-    {
-      "prop": "port",
-      "title": "$port",
-      "type": "input",
-      "default": "4840"
+      "default": "opc.tcp://uademo.prosysopc.com:53530/OPCUA/SimulationServer"
     }
   ],
   "p2": [
@@ -41,6 +34,70 @@
       "type": "password",
       "default": "password",
       "hide": "!data.p2.use_password"
+    },
+    {
+      "prop": "securityPolicy",
+      "title": "Security Policy",
+      "type": "droplist",
+      "data": [
+        {
+          "id": "None",
+          "title": "None"
+        },
+        {
+          "id": "Basic256Sha256",
+          "title": "Basic256Sha256"
+        },
+        {
+          "id": "Basic256Rsa15",
+          "title": "Basic256Rsa15"
+        },
+        {
+          "id": "Basic256",
+          "title": "Basic256"
+        },
+        {
+          "id": "Basic192Rsa15",
+          "title": "Basic192Rsa15"
+        },
+        {
+          "id": "Basic192",
+          "title": "Basic192"
+        },
+        {
+          "id": "Basic128Rsa15",
+          "title": "Basic128Rsa15"
+        },
+        {
+          "id": "Basic128",
+          "title": "Basic128"
+        },
+        {
+          "id": "Aes128_Sha256_RsaOaep",
+          "title": "Aes128_Sha256_RsaOaep"
+        }
+      ],
+      "default": "None"
+    },
+    {
+      "prop": "messageSecurityMode",
+      "title": "MessageSecurityMode",
+      "type": "droplist",
+      "data": [
+        {
+          "id": "None",
+          "title": "None"
+        },
+        {
+          "id": "Sign",
+          "title": "Sign"
+        },
+        {
+          "id": "SignAndEncrypt",
+          "title": "SignAndEncrypt"
+        }  
+      ],
+      "default": "None"
     },
     {
       "prop": "restarttime",

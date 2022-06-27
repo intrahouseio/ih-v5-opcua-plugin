@@ -17,7 +17,6 @@ const {
 } = require("node-opcua");
 
 const Scanner = require("./lib/scanner");
-// const client = require('./lib/fakeclient');
 
 module.exports = async function (plugin) {
   let client;
@@ -35,8 +34,7 @@ module.exports = async function (plugin) {
   });
 
   async function connect(params) {
-    const { host, port, use_password, userName, password } = params;
-    const endpointUrl = `opc.tcp://${host}:${port}`;
+    const { endpointUrl, use_password, userName, password, securityPolicy, messageSecurityMode } = params;
 
     const connectionStrategy = {
       initialDelay: 1000,
@@ -46,9 +44,9 @@ module.exports = async function (plugin) {
       client = OPCUAClient.create({
         applicationName: "MyClient",
         connectionStrategy,
-        securityMode: MessageSecurityMode.None,
-        securityPolicy: SecurityPolicy.None,
-        endpointMustExist: false,
+        securityMode: MessageSecurityMode[messageSecurityMode],
+        securityPolicy: SecurityPolicy[securityPolicy],
+        endpointMustExist: false
       });
 
       client.on("backoff", (retry, delay) => {
@@ -79,18 +77,16 @@ module.exports = async function (plugin) {
       });
 
       // step 1 : connect to
-
       await client.connect(endpointUrl);
       plugin.log("connected !", 0);
 
       // step 2 : createSession
-      /**/
+      /**/ 
       if (use_password) {
         session = await client.createSession({
           userName: userName,
           password: password,
         });
-        plugin.log("connected !", 0);
       } else {
         session = await client.createSession({
         });
@@ -99,6 +95,7 @@ module.exports = async function (plugin) {
       
     } catch (err) {
       plugin.log("An error has occured : " + util.inspect(err));
+      plugin.exit();
     }
   }
 
@@ -189,7 +186,7 @@ module.exports = async function (plugin) {
           value: {
             value: {
               dataType: DataType[element.dataType],
-              value: element.dataType == 'Boolean' ? element.value == 0 ? false : true : element.value,
+              value: element.dataType == 'Boolean' || 'Bool' ? element.value == 0 ? false : true : element.value,
             },
           },
         },
