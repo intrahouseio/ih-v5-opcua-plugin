@@ -12,7 +12,14 @@
       "title": "Endpoint URL",
       "type": "input",
       "default": "opc.tcp://uademo.prosysopc.com:53530/OPCUA/SimulationServer"
-    }
+    },
+    {
+      "prop": "restarttime",
+      "title": "$Unit_Restarttime",
+      "type": "number",
+      "default": 5
+    },
+    { "prop": "loglevel", "title": "$LogLevel", "type": "droplist", "data": "loglevelList" }
   ],
   "p2": [
     {
@@ -98,12 +105,6 @@
         }  
       ],
       "default": "None"
-    },
-    {
-      "prop": "restarttime",
-      "title": "$Unit_Restarttime",
-      "type": "number",
-      "default": 5
     }
   ],
 

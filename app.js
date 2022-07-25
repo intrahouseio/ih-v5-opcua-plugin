@@ -42,7 +42,7 @@ module.exports = async function (plugin) {
     };
     try {
       client = OPCUAClient.create({
-        applicationName: "MyClient",
+        applicationName: "IHClient",
         connectionStrategy,
         securityMode: MessageSecurityMode[messageSecurityMode],
         securityPolicy: SecurityPolicy[securityPolicy],
@@ -52,7 +52,7 @@ module.exports = async function (plugin) {
       client.on("backoff", (retry, delay) => {
         plugin.log(
           `Backoff ", ${retry}, " next attempt in ", ${delay}, "ms"`,
-          0
+          2
         );
         plugin.exit();
       });
@@ -69,7 +69,7 @@ module.exports = async function (plugin) {
         plugin.log("Connection failed", 0);
       });
       client.on("start_reconnection", () => {
-        plugin.log("Starting reconnection", 0);
+        plugin.log("Starting reconnection", 1);
       });
 
       client.on("after_reconnection", (err) => {
@@ -113,18 +113,18 @@ module.exports = async function (plugin) {
       subscription
         .on("started", () => {
           plugin.log(
-            "subscription started - subscriptionId=",
-            subscription.subscriptionId
+            "subscription started - subscriptionId=" +
+            subscription.subscriptionId, 1
           );
         })
         .on("keepalive", () => {
-          plugin.log("keepalive");
+          plugin.log("keepalive", 2);
         })
         .on("terminated", () => {
-          plugin.log("terminated");
+          plugin.log("terminated", 0);
         });
     } catch (err) {
-      plugin.log("An error has occured : ", err);
+      plugin.log("An error has occured : "+ util.inspect(err));
     }
   }
 
@@ -169,10 +169,9 @@ module.exports = async function (plugin) {
         }
         //plugin.log("Statuscode" + util.inspect(dataValue.statusCode._value));
         plugin.sendData([{ id: chanId, value: dataValue.value.value, chstatus: dataValue.statusCode._value }]);
-        //console.log(" value has changed : ", chanId, "  ", dataValue.value.value);
       });
     } catch (err) {
-      plugin.log("An error has occured : ", err);
+      plugin.log("An error has occured : "+ util.inspect(err));
     }
   }
 
@@ -195,7 +194,7 @@ module.exports = async function (plugin) {
             plugin.log("Write OK");
           } else {
             plugin.log(
-              "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode
+              "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 0
             );
           }
         }
