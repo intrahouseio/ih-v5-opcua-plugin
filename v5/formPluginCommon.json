@@ -2,6 +2,8 @@
   "grid": [
     { "id": "p1", "xs": 6, "class": "main", "table": "units" },
     { "id": "p2", "xs": 6, "class": "main", "table": "units" },
+    { "id": "p3", "xs": 6, "class": "main", "table": "units" },
+    { "id": "p4", "xs": 6, "class": "main", "table": "units" },
     { "id": "p9", "xs": 12, "class": "main", "table": "unitsTreeTable", "height": "fill" }
   ],
 
@@ -12,6 +14,12 @@
       "title": "Endpoint URL",
       "type": "input",
       "default": "opc.tcp://uademo.prosysopc.com:53530/OPCUA/SimulationServer"
+    },
+    {
+      "prop": "buffertime",
+      "title": "Buffer time, ms",
+      "type": "number",
+      "default": 500
     },
     {
       "prop": "restarttime",
@@ -88,7 +96,7 @@
     },
     {
       "prop": "messageSecurityMode",
-      "title": "MessageSecurityMode",
+      "title": "Message Security Mode",
       "type": "droplist",
       "data": [
         {
@@ -105,6 +113,58 @@
         }  
       ],
       "default": "None"
+    }
+  ],
+  "p3": [
+    {
+      "prop": "requestedPublishingInterval",
+      "title": "Requested Publishing Interval",
+      "type": "number",
+      "default": 1000
+    },
+    {
+      "prop": "requestedLifetimeCount",
+      "title": "Requested Lifetime Count",
+      "type": "number",
+      "default": 100
+    },
+    {
+      "prop": "requestedMaxKeepAliveCount",
+      "title": "Requested Max KeepAlive Count",
+      "type": "number",
+      "default": 10
+    },
+    {
+      "prop": "maxNotificationsPerPublish",
+      "title": "Max Notifications Per Publish",
+      "type": "number",
+      "default": 100
+    },
+    {
+      "prop": "priority",
+      "title": "Priority",
+      "type": "number",
+      "default": 10
+    }
+  ],
+  "p4": [
+    {
+      "prop": "samplingInterval",
+      "title": "Sampling Interval",
+      "type": "number",
+      "default": 100
+    },
+    {
+      "prop": "queueSize",
+      "title": "Queue Size",
+      "type": "number",
+      "default": 10
+    },
+    {
+      "prop": "discardOldest",
+      "title": "Discard Oldest",
+      "type": "cb",
+      "default": true
     }
   ],
 
