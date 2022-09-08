@@ -186,7 +186,8 @@
              case 4: identifierString = ';b='; break;
              default: identifierString = String(monitorItem.itemToMonitor.nodeId.identifierType); break;
            }
-           let chanId
+           let chanId;
+           let ts;
            if (identifierString == ';b=') {
              chanId = "ns=" +
                monitorItem.itemToMonitor.nodeId.namespace +
@@ -198,8 +199,9 @@
                identifierString +
                monitorItem.itemToMonitor.nodeId.value;
            }
-           //plugin.log("Statuscode" + util.inspect(dataValue.statusCode._value));
-           toSend.push({ id: chanId, value: dataValue.value.value, chstatus: dataValue.statusCode._value });
+           ts = new Date(dataValue.sourceTimestamp).getTime();
+           //plugin.log("Statuscode" + util.inspect(dataValue));
+           toSend.push({ id: chanId, value: dataValue.value.value, chstatus: dataValue.statusCode._value, ts: ts });
            //plugin.sendData([{ id: chanId, value: dataValue.value.value, chstatus: dataValue.statusCode._value }]);
          });
        }
