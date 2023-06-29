@@ -9,6 +9,8 @@
 
   "spacing": 10,
   "p1": [
+    { "prop": "id", "title": "ID", "type": "text" },
+    { "prop": "name", "title": "$Name", "type": "input" },
     {
       "prop": "endpointUrl",
       "title": "Endpoint URL",
@@ -116,6 +118,12 @@
     }
   ],
   "p3": [
+    {
+      "prop": "maxVariablesPerSub",
+      "title": "Max Variables Per Subscription",
+      "type": "number",
+      "default": 100
+    },
     {
       "prop": "requestedPublishingInterval",
       "title": "Requested Publishing Interval",
