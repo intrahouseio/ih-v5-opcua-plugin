@@ -30,11 +30,10 @@ module.exports = async function (plugin) {
   const scanner = new Scanner(plugin);
   //plugin.onCommnad(async data => parseCommand(data))
   plugin.onAct(async (data) => write(data));
-  plugin.channels.onChange(async function () {
+  plugin.channels.onChange(async function (data) {
     monitoredItemArr.forEach(item => item.terminate())
-    //monitoredItem.terminate();
     const channels = await plugin.channels.get();
-    monitor(channels);
+    monitor(plugin.params.data, channels);
   });
   const { buffertime } = plugin.params.data;
   sendNext();
@@ -78,23 +77,23 @@ module.exports = async function (plugin) {
       });
 
       client.on("connection_reestablished", () => {
-        plugin.log("Connection re-established", 0);
+        plugin.log("Connection re-established", 2);
       });
 
       client.on("connection_failed", () => {
-        plugin.log("Connection failed", 0);
+        plugin.log("Connection failed", 2);
       });
       client.on("start_reconnection", () => {
-        plugin.log("Starting reconnection", 1);
+        plugin.log("Starting reconnection", 2);
       });
 
       client.on("after_reconnection", (err) => {
-        plugin.log(`After Reconnection event =>", ${err}`, 0);
+        plugin.log(`After Reconnection event =>", ${err}`, 2);
       });
 
       // step 1 : connect to
       await client.connect(endpointUrl);
-      plugin.log("connected !", 0);
+      plugin.log("connected !", 2);
 
       // step 2 : createSession
       /**/
@@ -107,10 +106,10 @@ module.exports = async function (plugin) {
         session = await client.createSession({
         });
       }
-      plugin.log("session created !", 0);
+      plugin.log("session created !", 2);
 
     } catch (err) {
-      plugin.log("An error has occured : " + util.inspect(err));
+      plugin.log("An error has occured : " + util.inspect(err), 2);
       plugin.exit();
     }
   }
@@ -138,10 +137,10 @@ module.exports = async function (plugin) {
           plugin.log("keepalive", 2);
         })
         .on("terminated", () => {
-          plugin.log("terminated", 0);
+          plugin.log("terminated", 2);
         });
     } catch (err) {
-      plugin.log("An error has occured : " + util.inspect(err));
+      plugin.log("An error has occured : " + util.inspect(err), 2);
     }
   }
 
@@ -216,12 +215,12 @@ module.exports = async function (plugin) {
       }
 
     } catch (err) {
-      plugin.log("An error has occured : " + util.inspect(err));
+      plugin.log("An error has occured : " + util.inspect(err), 2);
     }
   }
 
   async function write(data) {
-    plugin.log(util.inspect(data));
+    plugin.log(util.inspect(data), 2);
     data.data.forEach((element) =>
       session.write(
         {
@@ -236,15 +235,32 @@ module.exports = async function (plugin) {
         },
         (err, statusCode) => {
           if (!err) {
-            plugin.log("Write OK");
+            plugin.log("Write OK", 2);
           } else {
             plugin.log(
-              "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 0
+              "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 2
             );
           }
         }
       )
     );
+    /*var methodsToCall = [];
+                    methodsToCall.push({
+                        objectId: objectWithMethodsNodeId,
+                        methodId: methodIONodeId,
+                        inputArguments: [{
+                            dataType: DataType.UInt32,
+                            arrayType: VariantArrayType.Scalar,
+                            value:  32 }
+                        ] //OK
+                    });
+                    the_session.call(methodsToCall,function(err,results){
+                        results.length.should.eql(1);
+                        results[0].statusCode.should.eql(StatusCodes.Good);
+                        ///xx console.log(results[0].toString());
+                        callback(err);
+                    });
+      */ 
   }
   async function main() {
     await connect(plugin.params.data);
