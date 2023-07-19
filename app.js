@@ -175,7 +175,7 @@ module.exports = async function (plugin) {
 
       for (let i = 0; i < monitoredItemArr.length; i++) {
         monitoredItemArr[i].on('err', (monitorItem, dataValue) => {
-          plugin.log("monitorItem " + monitorItem + " dataValue " + dataValue);
+          plugin.log("monitorItem " + monitorItem + " dataValue " + dataValue, 2);
         })
         monitoredItemArr[i].on("changed", (monitorItem, dataValue) => {
           let identifierString;
@@ -204,7 +204,7 @@ module.exports = async function (plugin) {
           //plugin.log("Statuscode" + util.inspect(dataValue));
           if (typeof dataValue.value.value === 'object') {
             value = JSON.stringify(dataValue.value.value);
-          } else if (typeof dataValue.value.value == "boolean")  {
+          } else if (typeof dataValue.value.value == "boolean") {
             value = dataValue.value.value == true ? 1 : 0;
           } else {
             value = dataValue.value.value;
@@ -221,46 +221,48 @@ module.exports = async function (plugin) {
 
   async function write(data) {
     plugin.log(util.inspect(data), 2);
-    data.data.forEach((element) =>
-      session.write(
-        {
-          nodeId: element.id,
-          attributeId: AttributeIds.Value,
-          value: {
-            value: {
-              dataType: DataType[element.dataType],
-              value: (element.dataType == 'Boolean') || (element.dataType == 'Bool') ? element.value == 0 ? false : true : element.value,
-            },
-          },
-        },
-        (err, statusCode) => {
+    data.data.forEach((element) => {
+      if (element.dataType == 'Method') {
+        const methodToCall = {
+          objectId: element.objectId,
+          methodId: element.id
+        }
+        session.call(methodToCall, function (err, results) {
           if (!err) {
-            plugin.log("Write OK", 2);
+            plugin.log("Call Method OK", 2);
           } else {
             plugin.log(
-              "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 2
+              "Call Method ERROR: " + util.inspect(err) + " statusCode=" + results, 2
             );
           }
-        }
-      )
-    );
-    /*var methodsToCall = [];
-                    methodsToCall.push({
-                        objectId: objectWithMethodsNodeId,
-                        methodId: methodIONodeId,
-                        inputArguments: [{
-                            dataType: DataType.UInt32,
-                            arrayType: VariantArrayType.Scalar,
-                            value:  32 }
-                        ] //OK
-                    });
-                    the_session.call(methodsToCall,function(err,results){
-                        results.length.should.eql(1);
-                        results[0].statusCode.should.eql(StatusCodes.Good);
-                        ///xx console.log(results[0].toString());
-                        callback(err);
-                    });
-      */ 
+        });
+      } else {
+        session.write(
+          {
+            nodeId: element.id,
+            attributeId: AttributeIds.Value,
+            value: {
+              value: {
+                dataType: DataType[element.dataType],
+                value: (element.dataType == 'Boolean') || (element.dataType == 'Bool') ? element.value == 0 ? false : true : element.value,
+              },
+            },
+          },
+          (err, statusCode) => {
+            if (!err) {
+              plugin.log("Write OK", 2);
+            } else {
+              plugin.log(
+                "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 2
+              );
+            }
+          }
+        )
+      }
+
+    });
+
+
   }
   async function main() {
     await connect(plugin.params.data);

@@ -11,9 +11,10 @@
     { "prop": "devpropname", "title": "Свойство для привязки", "type": "input" },
     { "prop": "chan", "title": "Node ID", "type": "input" },  
     { "prop": "dataType", "title": "Data type", "type": "input" }, 
-    { "prop": "accessLevel", "title": "Access Level", "type": "text" },  
+    { "prop": "accessLevel", "title": "Access Level", "type": "text" }, 
+    { "prop": "objectId", "title": "Object ID", "type": "text" }, 
   
-    { "prop": "r", "title": "Чтение", "type": "cb" },
+    { "prop": "r", "title": "Чтение", "type": "cb", "hide": "data.p2.dataType=='Method'"  },
     { "prop": "calc", "title": "$Devhard_Calc", "type": "input", "hide": "!data.p2.r" },
     { "prop": "w", "title": "Запись", "type": "cb" },
     { "prop": "calc_out", "title": "$Devhard_Calc_Out", "type": "input", "hide": "!data.p2.w" }
