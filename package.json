@@ -9,6 +9,6 @@
   "author": "Intra LLC",
   "license": "MIT",
   "dependencies": {
-    "node-opcua": "^2.47.0"
+    "node-opcua": "^2.113.0"
   }
 }

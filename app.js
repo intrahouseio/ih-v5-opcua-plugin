@@ -16,6 +16,8 @@ const {
   DataType,
 } = require("node-opcua");
 
+const { OPCUACertificateManager } = require('node-opcua-certificate-manager');
+
 const Scanner = require("./lib/scanner");
 
 module.exports = async function (plugin) {
@@ -61,7 +63,11 @@ module.exports = async function (plugin) {
         connectionStrategy,
         securityMode: MessageSecurityMode[messageSecurityMode],
         securityPolicy: SecurityPolicy[securityPolicy],
-        endpointMustExist: false
+        endpointMustExist: false,
+        clientCertificateManager: new OPCUACertificateManager({
+      automaticallyAcceptUnknownCertificate: true,
+      untrustUnknownCertificate: false
+    }),
       });
 
       client.on("backoff", (retry, delay) => {
