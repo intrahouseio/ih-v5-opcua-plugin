@@ -14,6 +14,7 @@ const {
   TimestampsToReturn,
   ClientMonitoredItemGroup,
   DataType,
+  NodeId,
 } = require("node-opcua");
 
 const { OPCUACertificateManager } = require('node-opcua-certificate-manager');
@@ -227,7 +228,8 @@ module.exports = async function (plugin) {
 
   async function write(data) {
     plugin.log(util.inspect(data), 2);
-    data.data.forEach((element) => {
+      for (let i=0; i<data.data.length; i++){
+      const element = data.data[i];
       if (element.dataType == 'Method') {
         const methodToCall = {
           objectId: element.objectId,
@@ -243,13 +245,24 @@ module.exports = async function (plugin) {
           }
         });
       } else {
+        let nodeType;
+        if (element.dataType.includes("ns")) {
+          const nodeId = NodeId.resolveNodeId(element.id);
+          try {
+            nodeType = await session.getBuiltInDataType(nodeId);
+          } catch (e) {
+            plugin.log("Get dataType ERROR " +e, 2);
+          }          
+        } else {
+          nodeType = DataType[element.dataType];
+        }        
         session.write(
           {
             nodeId: element.id,
             attributeId: AttributeIds.Value,
             value: {
               value: {
-                dataType: DataType[element.dataType],
+                dataType: nodeType,
                 value: (element.dataType == 'Boolean') || (element.dataType == 'Bool') ? element.value == 0 ? false : true : element.value,
               },
             },
@@ -266,7 +279,7 @@ module.exports = async function (plugin) {
         )
       }
 
-    });
+    };
 
 
   }
