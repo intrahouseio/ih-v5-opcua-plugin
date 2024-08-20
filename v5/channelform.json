@@ -1,23 +1,45 @@
 {
   "grid": [
+    {
+      "id": "pnode",
+      "xs": 4,
+      "class": "main",
+      "table": "devhard_with_parent_node",
+      "hide": "data.pnode.foldertype != 'node'"
+    },
+    { "id": "p1", "xs": 4, "class": "main", "table": "devhard" },
+    { "id": "p3", "xs": 4, "class": "main", "table": "devhard" },
     { "id": "p2", "xs": 12, "class": "main", "table": "devhard" },
+
     { "id": "p9", "xs": 12, "class": "main", "table": "onechannelrtTable"},
-    { "id": "ptest", "xs": 12, "class": "main", "table": "devhard", "hide": "!data.p2.w" }
+    { "id": "ptest", "xs": 12, "class": "main", "table": "devhard", "hide": "!data.p3.w" }
   ],
   "spacing": 4,
-
-  "p2": [
+  "pnode": [
+    { "prop": "foldertype", "title": "foldertype", "type": "text", "hide": "1==1" },
+    { "prop": "parentname", "title": "Name", "type": "text" },
+    { "prop": "parentsamplingInterval", "title": "Sampling Interval", "type": "text" },
+    { "prop": "parentqueueSize", "title": "Queue Size", "type": "text" },
+    { "prop": "parentdiscardOldest", "title": "Discard Oldest", "type": "text" }
+    
+  ],
+  "p1": [
     { "prop": "title", "title": "Name", "type": "input" },  
-    { "prop": "devpropname", "title": "Свойство для привязки", "type": "input" },
+    { "prop": "devpropname", "title": "Свойство для привязки", "type": "input" }
+
+  ],
+  "p3": [
+    { "prop": "r", "title": "Чтение", "type": "cb", "hide": "data.p2.dataType=='Method'"  },
+    { "prop": "calc", "title": "$Devhard_Calc", "type": "input", "hide": "!data.p3.r" },
+    { "prop": "w", "title": "Запись", "type": "cb" },
+    { "prop": "calc_out", "title": "$Devhard_Calc_Out", "type": "input", "hide": "!data.p3.w" }
+  ],
+  "p2": [
+    
     { "prop": "chan", "title": "Node ID", "type": "input" },  
     { "prop": "dataType", "title": "Data type", "type": "input" }, 
     { "prop": "accessLevel", "title": "Access Level", "type": "text" }, 
-    { "prop": "objectId", "title": "Object ID", "type": "text" }, 
-  
-    { "prop": "r", "title": "Чтение", "type": "cb", "hide": "data.p2.dataType=='Method'"  },
-    { "prop": "calc", "title": "$Devhard_Calc", "type": "input", "hide": "!data.p2.r" },
-    { "prop": "w", "title": "Запись", "type": "cb" },
-    { "prop": "calc_out", "title": "$Devhard_Calc_Out", "type": "input", "hide": "!data.p2.w" }
+    { "prop": "objectId", "title": "Object ID", "type": "text" }  
   ],
   "ptest": [
     { "prop": "header_testwrite", "title": "Header_testwrite", "type": "header" },

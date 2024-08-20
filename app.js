@@ -28,11 +28,15 @@ module.exports = async function (plugin) {
   let monitoredItem;
   let monitoredItemArr = [];
   let toSend = [];
+  let curChannels = {};
   let T1;
 
   const scanner = new Scanner(plugin);
-  //plugin.onCommnad(async data => parseCommand(data))
+
+
   plugin.onAct(async (data) => write(data));
+  plugin.onCommand(async (data) => parseCommand(data));
+
   plugin.channels.onChange(async function (data) {
     monitoredItemArr.forEach(item => item.terminate())
     const channels = await plugin.channels.get();
@@ -40,6 +44,7 @@ module.exports = async function (plugin) {
   });
   const { buffertime } = plugin.params.data;
   sendNext();
+
 
 
   function sendNext() {
@@ -66,9 +71,9 @@ module.exports = async function (plugin) {
         securityPolicy: SecurityPolicy[securityPolicy],
         endpointMustExist: false,
         clientCertificateManager: new OPCUACertificateManager({
-      automaticallyAcceptUnknownCertificate: true,
-      untrustUnknownCertificate: false
-    }),
+          automaticallyAcceptUnknownCertificate: true,
+          untrustUnknownCertificate: false
+        }),
       });
 
       client.on("backoff", (retry, delay) => {
@@ -152,34 +157,44 @@ module.exports = async function (plugin) {
   }
 
   function monitor(params, channels) {
+    const groupChannels = groupByUniq(channels, 'parentnodefolder');
+    curChannels = groupBy(channels, 'chan');
+    let parameters = {};
     const { samplingInterval, discardOldest, queueSize, maxVariablesPerSub } = params;
 
-    const itemsToMonitor = channels.map((channel) => {
-      return { nodeId: channel.id, attributeId: AttributeIds.Value };
-    });
+    Object.keys(groupChannels).forEach(key => {
+      const itemsToMonitor = [];
+      groupChannels[key].ref.forEach((channel) => {
+        itemsToMonitor.push({ nodeId: channel.chan, attributeId: AttributeIds.Value });
+      });
+      if (key == undefined) {
+        parameters = {
+          samplingInterval: samplingInterval || 100,
+          discardOldest: discardOldest || true,
+          queueSize: queueSize || 10,
+          maxVariablesPerSub: maxVariablesPerSub || 100
+        };
+      } else {
+        parameters = {
+          samplingInterval: groupChannels[key].ref[0].parentsamplingInterval || 100,
+          discardOldest: groupChannels[key].ref[0].parentdiscardOldest || true,
+          queueSize: groupChannels[key].ref[0].parentqueueSize || 10,
+          maxVariablesPerSub: maxVariablesPerSub || 100
+        };
+      }
 
-    const parameters = {
-      samplingInterval: samplingInterval || 100,
-      discardOldest: discardOldest || true,
-      queueSize: queueSize || 10,
-      maxVariablesPerSub: maxVariablesPerSub || 100
-    };
-
-    while (itemsToMonitor.length > 0) {
-      let chunk = itemsToMonitor.splice(0, parameters.maxVariablesPerSub);
-      monitoredItem = ClientMonitoredItemGroup.create(
-        subscription,
-        chunk,
-        parameters,
-        TimestampsToReturn.Both
-      );
-      monitoredItemArr.push(monitoredItem);
-    }
-
-
+      while (itemsToMonitor.length > 0) {
+        let chunk = itemsToMonitor.splice(0, parameters.maxVariablesPerSub);
+        monitoredItem = ClientMonitoredItemGroup.create(
+          subscription,
+          chunk,
+          parameters,
+          TimestampsToReturn.Both
+        );
+        monitoredItemArr.push(monitoredItem);
+      }
+    })
     try {
-
-
       for (let i = 0; i < monitoredItemArr.length; i++) {
         monitoredItemArr[i].on('err', (monitorItem, dataValue) => {
           plugin.log("monitorItem " + monitorItem + " dataValue " + dataValue, 2);
@@ -216,7 +231,9 @@ module.exports = async function (plugin) {
           } else {
             value = dataValue.value.value;
           }
-          toSend.push({ id: chanId, value: value, chstatus: dataValue.statusCode._value, ts: ts });
+          curChannels[chanId].ref.forEach(item => {
+            toSend.push({ id: item.id, value: value, chstatus: dataValue.statusCode._value, ts: ts });
+          })
           //plugin.sendData([{ id: chanId, value: dataValue.value.value, chstatus: dataValue.statusCode._value }]);
         });
       }
@@ -228,12 +245,12 @@ module.exports = async function (plugin) {
 
   async function write(data) {
     plugin.log(util.inspect(data), 2);
-      for (let i=0; i<data.data.length; i++){
+    for (let i = 0; i < data.data.length; i++) {
       const element = data.data[i];
       if (element.dataType == 'Method') {
         const methodToCall = {
           objectId: element.objectId,
-          methodId: element.id
+          methodId: element.chan
         }
         session.call(methodToCall, function (err, results) {
           if (!err) {
@@ -247,18 +264,18 @@ module.exports = async function (plugin) {
       } else {
         let nodeType;
         if (element.dataType.includes("ns")) {
-          const nodeId = NodeId.resolveNodeId(element.id);
+          const nodeId = NodeId.resolveNodeId(element.chan);
           try {
             nodeType = await session.getBuiltInDataType(nodeId);
           } catch (e) {
-            plugin.log("Get dataType ERROR " +e, 2);
-          }          
+            plugin.log("Get dataType ERROR " + e, 2);
+          }
         } else {
           nodeType = DataType[element.dataType];
-        }        
+        }
         session.write(
           {
-            nodeId: element.id,
+            nodeId: element.chan,
             attributeId: AttributeIds.Value,
             value: {
               value: {
@@ -280,9 +297,67 @@ module.exports = async function (plugin) {
       }
 
     };
-
-
   }
+
+  async function parseCommand(message) {
+    plugin.log(`Command '${message.command}' received. Data: ${util.inspect(message)}`, 2);
+    let payload = {};
+    try {
+      if (message.command == 'syncHistory') {
+        const nodesObj = {};
+        const nodes = [];
+        message.data.chanarr.forEach(item => {
+          nodesObj[item.chan] = item.id;
+          nodes.push(item.chan)
+        })
+
+        const startTime = new Date(message.data.startTime).toISOString();
+        const endTime = new Date(message.data.endTime).toISOString();
+        const result = await session.readHistoryValue(nodes, startTime, endTime);
+        nodes.forEach((node, index) => {
+          const data = [];
+          result[index].historyData.dataValues.forEach(item => {
+            const date = new Date(item.sourceTimestamp);
+            data.push({ id: nodesObj[node], value: item.value.value, ts: date.getTime() })
+          })
+          plugin.sendArchive(data);
+        })
+        plugin.sendResponse(Object.assign({ payload }, message), 1);
+      }
+    } catch (e) {
+      this.plugin.sendResponse(Object.assign({ payload: e }, message), 0);
+    }
+  }
+
+  function groupBy(objectArray, property) {
+    return objectArray.reduce((acc, obj) => {
+      let key = obj[property];
+      if (!acc[key]) {
+        acc[key] = {};
+        acc[key].ref = [];
+      }
+      acc[key].ref.push(obj);
+      return acc;
+    }, {});
+  }
+
+  function groupByUniq(objectArray, property) {
+    const uniq = {};
+    return objectArray.reduce((acc, obj) => {
+      let key = obj[property];
+      if (!acc[key]) {
+        acc[key] = {};
+        acc[key].ref = [];
+      }
+      if (uniq[obj.chan] == undefined) {
+        uniq[obj.chan] = obj;
+        acc[key].ref.push(obj);
+      }
+
+      return acc;
+    }, {});
+  }
+
   async function main() {
     await connect(plugin.params.data);
     subscribe(plugin.params.data);
