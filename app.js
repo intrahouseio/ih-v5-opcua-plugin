@@ -273,6 +273,12 @@ module.exports = async function (plugin) {
         } else {
           nodeType = DataType[element.dataType];
         }
+        let value;
+        if ((element.dataType == 'Boolean') || (element.dataType == 'Bool')) {
+          value = element.value == 0 ? false : true;
+        } else {
+          value = String(element.value)
+        }
         session.write(
           {
             nodeId: element.chan,
@@ -280,7 +286,7 @@ module.exports = async function (plugin) {
             value: {
               value: {
                 dataType: nodeType,
-                value: (element.dataType == 'Boolean') || (element.dataType == 'Bool') ? element.value == 0 ? false : true : element.value,
+                value: value,
               },
             },
           },
