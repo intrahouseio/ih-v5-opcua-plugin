@@ -23,5 +23,9 @@
     "parentsamplingInterval":100,
     "parentdiscardOldest": 1,
     "parentqueueSize": 10
-  }
+  },
+  "ext": [{ "prop": "redundancy_state", "note": "Redundancy state", "vtype": "N" },
+            { "prop": "current_server", "note": "Current server", "vtype": "N" },
+            { "prop": "current_endpoint", "note": "Current endpoint", "vtype": "S" }
+        ]
 }

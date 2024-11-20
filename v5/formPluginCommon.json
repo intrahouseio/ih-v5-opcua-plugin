@@ -18,6 +18,32 @@
       "default": "opc.tcp://uademo.prosysopc.com:53530/OPCUA/SimulationServer"
     },
     {
+      "prop": "initialDelay",
+      "title": "$initialDelay",
+      "type": "input",
+      "default": 1000
+    },
+    {
+      "prop": "maxRetry",
+      "title": "$maxRetry",
+      "type": "input",
+      "default": 3
+    },
+    {
+      "prop": "use_redundancy",
+      "title": "$use_redundancy",
+      "type": "cb",
+      "default": 0
+    },
+    {
+      "prop": "redundancy_endpointUrl",
+      "title": "Redundancy Endpoint URL",
+      "type": "input",
+      "default": "opc.tcp://uademo.prosysopc.com:53530/OPCUA/SimulationServer",
+      "hide": "!data.p1.use_redundancy"
+    },
+    
+    {
       "prop": "buffertime",
       "title": "Buffer time, ms",
       "type": "number",

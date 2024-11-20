@@ -2,5 +2,8 @@
     "port":"Port",
     "use_password":"Use authentication",
     "userName":"User Name",
-    "password":"Password"
+    "password":"Password",
+    "use_redundancy": "Use Redundancy",
+    "initialDelay": "Connection Timeout, ms",
+    "maxRetry": "Retries"
 }

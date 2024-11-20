@@ -30,10 +30,14 @@ module.exports = async function (plugin) {
   let toSend = [];
   let curChannels = {};
   let T1;
+  let redundancy = 0;
+  let status = "";
 
   const scanner = new Scanner(plugin);
 
-
+  process.send({ type: 'procinfo', data: { redundancy_state: plugin.params.data.use_redundancy } });
+  process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
+  process.send({ type: 'procinfo', data: { current_server: redundancy } });
   plugin.onAct(async (data) => write(data));
   plugin.onCommand(async (data) => parseCommand(data));
 
@@ -57,55 +61,78 @@ module.exports = async function (plugin) {
   }
 
   async function connect(params) {
-    const { endpointUrl, use_password, userName, password, securityPolicy, messageSecurityMode } = params;
+    const {
+      endpointUrl,
+      use_password,
+      userName,
+      password,
+      securityPolicy,
+      messageSecurityMode,
+      initialDelay,
+      maxRetry } = params;
 
     const connectionStrategy = {
-      initialDelay: 1000,
-      maxRetry: 3,
+      initialDelay: initialDelay || 1000,
+      maxRetry: maxRetry || 3,
     };
+
+    client = OPCUAClient.create({
+      applicationName: "IntraClient",
+      connectionStrategy,
+      securityMode: MessageSecurityMode[messageSecurityMode],
+      securityPolicy: SecurityPolicy[securityPolicy],
+      endpointMustExist: false,
+      clientCertificateManager: new OPCUACertificateManager({
+        automaticallyAcceptUnknownCertificate: true,
+        untrustUnknownCertificate: false
+      }),
+    });
+
+    client.on("backoff", async (retry, delay) => {
+      plugin.log(
+        `Backoff ", ${retry}, " next attempt in ", ${delay}, "ms"`,
+        2
+      );
+      if (redundancy == 0 && plugin.params.data.use_redundancy == 1) {        
+        if (plugin.params.data.maxRetry - 1 == retry) { 
+          await client.disconnect();   
+          plugin.params.data.endpointUrl = plugin.params.data.redundancy_endpointUrl;
+          redundancy = 1;
+          process.send({ type: 'procinfo', data: { current_server: redundancy } });
+          process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
+          main(plugin.params.data);          
+        }        
+      } else {
+        if (plugin.params.data.maxRetry - 1 == retry) {
+          plugin.exit();
+        }
+      }
+    });
+
+    client.on("connection_lost", () => {
+      plugin.log("connection_lost !", 2);
+    });
+
+    client.on("connection_reestablished", () => {
+      plugin.log("Connection re-established", 2);
+    });
+
+    client.on("connection_failed", () => {
+      plugin.log("Connection failed", 2);
+    });
+    client.on("start_reconnection", () => {
+      plugin.log("Starting reconnection", 2);
+    });
+
+    client.on("after_reconnection", (err) => {
+      plugin.log(`After Reconnection event =>", ${err}`, 2);
+    });
+
     try {
-      client = OPCUAClient.create({
-        applicationName: "IntraClient",
-        connectionStrategy,
-        securityMode: MessageSecurityMode[messageSecurityMode],
-        securityPolicy: SecurityPolicy[securityPolicy],
-        endpointMustExist: false,
-        clientCertificateManager: new OPCUACertificateManager({
-          automaticallyAcceptUnknownCertificate: true,
-          untrustUnknownCertificate: false
-        }),
-      });
-
-      client.on("backoff", (retry, delay) => {
-        plugin.log(
-          `Backoff ", ${retry}, " next attempt in ", ${delay}, "ms"`,
-          2
-        );
-        plugin.exit();
-      });
-
-      client.on("connection_lost", () => {
-        plugin.exit();
-      });
-
-      client.on("connection_reestablished", () => {
-        plugin.log("Connection re-established", 2);
-      });
-
-      client.on("connection_failed", () => {
-        plugin.log("Connection failed", 2);
-      });
-      client.on("start_reconnection", () => {
-        plugin.log("Starting reconnection", 2);
-      });
-
-      client.on("after_reconnection", (err) => {
-        plugin.log(`After Reconnection event =>", ${err}`, 2);
-      });
-
       // step 1 : connect to
+      
       await client.connect(endpointUrl);
-      plugin.log("connected !", 2);
+      plugin.log("connected to " + endpointUrl, 2);
 
       // step 2 : createSession
       /**/
@@ -119,10 +146,16 @@ module.exports = async function (plugin) {
         });
       }
       plugin.log("session created !", 2);
+      return 1;
 
     } catch (err) {
-      plugin.log("An error has occured : " + util.inspect(err), 2);
-      plugin.exit();
+      plugin.log("An error has occured : " + util.inspect(err) + redundancy, 2);
+      if (redundancy == 0 && plugin.params.data.use_redundancy == 1) {
+        return 0;
+      } else {
+        plugin.exit();
+      }
+
     }
   }
 
@@ -245,6 +278,7 @@ module.exports = async function (plugin) {
 
   async function write(data) {
     plugin.log(util.inspect(data), 2);
+    let nodeArr = [];
     for (let i = 0; i < data.data.length; i++) {
       const element = data.data[i];
       if (element.dataType == 'Method') {
@@ -279,30 +313,33 @@ module.exports = async function (plugin) {
         } else {
           value = String(element.value)
         }
-        session.write(
-          {
-            nodeId: element.chan,
-            attributeId: AttributeIds.Value,
+        nodeArr.push({
+          nodeId: element.chan,
+          attributeId: AttributeIds.Value,
+          value: {
             value: {
-              value: {
-                dataType: nodeType,
-                value: value,
-              },
+              dataType: nodeType,
+              value: value,
             },
           },
-          (err, statusCode) => {
-            if (!err) {
-              plugin.log("Write OK", 2);
-            } else {
-              plugin.log(
-                "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 2
-              );
-            }
-          }
-        )
+        })
+       
       }
-
     };
+    if (nodeArr.length > 0) {
+      session.write(
+        nodeArr,
+        (err, statusCode) => {
+          if (!err) {
+            plugin.log("Write OK", 2);
+          } else {
+            plugin.log(
+              "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 2
+            );
+          }
+        }
+      )
+    }
   }
 
   async function parseCommand(message) {
@@ -364,13 +401,16 @@ module.exports = async function (plugin) {
     }, {});
   }
 
-  async function main() {
-    await connect(plugin.params.data);
-    subscribe(plugin.params.data);
-    monitor(plugin.params.data, plugin.channels.data);
+  async function main(connectionParams) {
+    const status = await connect(connectionParams);
+    if (status) {
+      subscribe(plugin.params.data);
+      monitor(plugin.params.data, plugin.channels.data);
+    }
+    
   }
 
-  main();
+  main(plugin.params.data);
 
   // --- События плагина ---
   // Сканирование
