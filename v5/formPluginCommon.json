@@ -48,14 +48,7 @@
       "title": "Buffer time, ms",
       "type": "number",
       "default": 500
-    },
-    {
-      "prop": "restarttime",
-      "title": "$Unit_Restarttime",
-      "type": "number",
-      "default": 5
-    },
-    { "prop": "loglevel", "title": "$LogLevel", "type": "droplist", "data": "loglevelList" }
+    }
   ],
   "p2": [
     {
@@ -141,7 +134,14 @@
         }  
       ],
       "default": "None"
-    }
+    },
+    {
+      "prop": "restarttime",
+      "title": "$Unit_Restarttime",
+      "type": "number",
+      "default": 5
+    },
+    { "prop": "loglevel", "title": "$LogLevel", "type": "droplist", "data": "loglevelList" }
   ],
   "p3": [
     {

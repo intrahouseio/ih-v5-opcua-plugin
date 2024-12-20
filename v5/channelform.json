@@ -9,10 +9,11 @@
     },
     { "id": "p1", "xs": 4, "class": "main", "table": "devhard" },
     { "id": "p3", "xs": 4, "class": "main", "table": "devhard" },
+    { "id": "p4", "xs": 4, "class": "main", "table": "devhard" },
     { "id": "p2", "xs": 12, "class": "main", "table": "devhard" },
 
     { "id": "p9", "xs": 12, "class": "main", "table": "onechannelrtTable"},
-    { "id": "ptest", "xs": 12, "class": "main", "table": "devhard", "hide": "!data.p3.w" }
+    { "id": "ptest", "xs": 12, "class": "main", "table": "devhard", "hide": "!data.p4.w" }
   ],
   "spacing": 4,
   "pnode": [
@@ -29,10 +30,13 @@
 
   ],
   "p3": [
-    { "prop": "r", "title": "Чтение", "type": "cb", "hide": "data.p2.dataType=='Method'"  },
-    { "prop": "calc", "title": "$Devhard_Calc", "type": "input", "hide": "!data.p3.r" },
-    { "prop": "w", "title": "Запись", "type": "cb" },
-    { "prop": "calc_out", "title": "$Devhard_Calc_Out", "type": "input", "hide": "!data.p3.w" }
+    { "prop": "r", "title": "$Read", "type": "cb", "hide": "data.p2.dataType=='Method'"  },
+    { "prop": "calc", "title": "$Devhard_Calc", "type": "input", "hide": "!data.p3.r" }
+  ],
+  "p4": [
+    { "prop": "w", "title": "$Write", "type": "cb" },
+    { "prop": "wresult", "title": "$wResult", "type": "cb", "hide": "!data.p4.w" },
+    { "prop": "calc_out", "title": "$Devhard_Calc_Out", "type": "input", "hide": "!data.p4.w" }
   ],
   "p2": [
     

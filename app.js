@@ -10,6 +10,7 @@ const {
   MessageSecurityMode,
   SecurityPolicy,
   AttributeIds,
+  StatusCodes,
   ClientSubscription,
   TimestampsToReturn,
   ClientMonitoredItemGroup,
@@ -93,15 +94,15 @@ module.exports = async function (plugin) {
         `Backoff ", ${retry}, " next attempt in ", ${delay}, "ms"`,
         2
       );
-      if (redundancy == 0 && plugin.params.data.use_redundancy == 1) {        
-        if (plugin.params.data.maxRetry - 1 == retry) { 
-          await client.disconnect();   
+      if (redundancy == 0 && plugin.params.data.use_redundancy == 1) {
+        if (plugin.params.data.maxRetry - 1 == retry) {
+          await client.disconnect();
           plugin.params.data.endpointUrl = plugin.params.data.redundancy_endpointUrl;
           redundancy = 1;
           process.send({ type: 'procinfo', data: { current_server: redundancy } });
           process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
-          main(plugin.params.data);          
-        }        
+          main(plugin.params.data);
+        }
       } else {
         if (plugin.params.data.maxRetry - 1 == retry) {
           plugin.exit();
@@ -130,7 +131,7 @@ module.exports = async function (plugin) {
 
     try {
       // step 1 : connect to
-      
+
       await client.connect(endpointUrl);
       plugin.log("connected to " + endpointUrl, 2);
 
@@ -320,10 +321,12 @@ module.exports = async function (plugin) {
             value: {
               dataType: nodeType,
               value: value,
-            },
+            },            
           },
+          itemId: element.id,
+          wresult: element.wresult
         })
-       
+
       }
     };
     if (nodeArr.length > 0) {
@@ -331,7 +334,16 @@ module.exports = async function (plugin) {
         nodeArr,
         (err, statusCode) => {
           if (!err) {
-            plugin.log("Write OK", 2);
+            plugin.log("Write OK statusCode=" + statusCode, 2);
+            //if (statusCode == StatusCodes.Good) {
+              const sendArr = [];
+              nodeArr.forEach(item => {
+                if (item.wresult) {
+                  sendArr.push({ id: item.itemId, value: item.value.value.value, chstatus: 0, ts: Date.now() })
+                }
+              })
+              if (sendArr.length > 0) plugin.sendData(sendArr);
+            //}
           } else {
             plugin.log(
               "Write ERROR: " + util.inspect(err) + " statusCode=" + statusCode, 2
@@ -407,7 +419,7 @@ module.exports = async function (plugin) {
       subscribe(plugin.params.data);
       monitor(plugin.params.data, plugin.channels.data);
     }
-    
+
   }
 
   main(plugin.params.data);
@@ -423,9 +435,23 @@ module.exports = async function (plugin) {
     }
   });
 
-  process.on("SIGTERM", () => {
+  process.on("SIGTERM", async () => {
+    await terminate();
     plugin.exit();
   });
+
+  if (plugin.onStop) {
+    plugin.onStop(async () => {
+      await terminate();
+    });
+  }
+  
+  async function terminate() {
+    if (!client.isReconnecting) {
+      await client.disconnect();
+      plugin.log('Client disconnected');
+    }
+  }
 };
 
 async function timeout(ms) {
