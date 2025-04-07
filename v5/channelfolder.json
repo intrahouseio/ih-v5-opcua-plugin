@@ -8,7 +8,7 @@
   "spacing": 4,
 
   "p1": [
-    { "prop": "chan", "title": "$Name", "type": "input" },
+    { "prop": "title", "title": "$Name", "type": "input" },
     { "prop": "foldertype", "title": "", "type": "text", "hide":"1==1" }
   ],
 

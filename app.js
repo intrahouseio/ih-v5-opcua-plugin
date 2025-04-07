@@ -435,6 +435,10 @@ module.exports = async function (plugin) {
     }
   });
 
+  plugin.onScanexpand((scanObj) => {
+    scanner.scanExpand(scanObj);
+  });  
+
   process.on("SIGTERM", async () => {
     await terminate();
     plugin.exit();
