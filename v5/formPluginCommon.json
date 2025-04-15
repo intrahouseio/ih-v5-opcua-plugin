@@ -41,6 +41,20 @@
       "type": "input",
       "default": "opc.tcp://uademo.prosysopc.com:53530/OPCUA/SimulationServer",
       "hide": "!data.p1.use_redundancy"
+    },    
+    {
+      "prop": "keepAliveTimeoutThreshold",
+      "title": "KeepAlive Timeout (ms)",
+      "type": "input",
+      "default": 20000,
+      "hide": "!data.p1.use_redundancy"
+    },
+    {
+      "prop": "primaryCheckIntervalMs",
+      "title": "Primary check interval (ms)",
+      "type": "input",
+      "default": 30000,
+      "hide": "!data.p1.use_redundancy"
     },
     
     {
