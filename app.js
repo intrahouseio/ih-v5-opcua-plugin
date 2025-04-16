@@ -504,7 +504,7 @@ module.exports = async function (plugin) {
     }
   });
 
-  plugin.onScanexpand((scanObj) => {
+  if (plugin.onScanexpand) plugin.onScanexpand((scanObj) => {
     scanner.scanExpand(scanObj);
   });
 
