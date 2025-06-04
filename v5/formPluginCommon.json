@@ -150,6 +150,12 @@
       "default": "None"
     },
     {
+      "prop": "use_system_ts",
+      "title": "$use_system_ts",
+      "type": "cb",
+      "default": 0
+    },
+    {
       "prop": "restarttime",
       "title": "$Unit_Restarttime",
       "type": "number",

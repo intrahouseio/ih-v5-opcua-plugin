@@ -6,5 +6,6 @@
     "use_redundancy": "Use Redundancy",
     "initialDelay": "Connection Timeout, ms",
     "maxRetry": "Retries",
-    "wResult": "Return write result after a successful write"
+    "wResult": "Return write result after a successful write",
+    "use_system_ts": "Use system time for ts"
 }

@@ -48,7 +48,7 @@ module.exports = async function (plugin) {
     const channels = await plugin.channels.get();
     monitor(plugin.params.data, channels);
   });
-  const { buffertime } = plugin.params.data;
+  const { buffertime, use_system_ts } = plugin.params.data;
   sendNext();
 
   function sendNext() {
@@ -347,7 +347,7 @@ module.exports = async function (plugin) {
             value = dataValue.value.value;
           }
           curChannels[chanId].ref.forEach(item => {
-            toSend.push({ id: item.id, value: value, chstatus: dataValue.statusCode._value, ts: ts });
+            toSend.push({ id: item.id, value: value, chstatus: dataValue.statusCode._value, ts: use_system_ts ? Date.now() : ts });
           });
         });
       }
