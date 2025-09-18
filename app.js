@@ -347,12 +347,33 @@ module.exports = async function (plugin) {
             value = dataValue.value.value;
           }
           curChannels[chanId].ref.forEach(item => {
-            toSend.push({ id: item.id, value: value, chstatus: dataValue.statusCode._value, ts: use_system_ts ? Date.now() : ts });
+            if (item.dataType.toUpperCase() == 'INT64' || item.dataType.toUpperCase() == 'LINT') {
+              value = wordsToBigInt(dataValue.value.value, 'INT64')
+            }
+            if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD') {
+              value = wordsToBigInt(dataValue.value.value, 'UINT64')
+            }
+            toSend.push({ id: item.id, value: value, quality: dataValue.statusCode._value, ts: use_system_ts ? Date.now() : ts });
           });
         });
       }
     } catch (err) {
       plugin.log(`Monitor error: ${util.inspect(err)}`, 2);
+    }
+
+    function wordsToBigInt(arr, type) {
+      if (!Array.isArray(arr) || arr.length !== 2) {
+        plugin.log("Expected array of 2 elements ");
+        return;
+      }
+      const lo = arr[1] >>> 0; 
+      const hi = arr[0] >>> 0;
+
+      const buf = Buffer.alloc(8);
+      buf.writeUInt32LE(lo, 0);
+      buf.writeUInt32LE(hi, 4);
+      if (type.toUpperCase() == 'INT64') return String(buf.readBigInt64LE(0));
+      if (type.toUpperCase() == 'UINT64') return String(buf.readBigUint64LE(0));
     }
   }
 
@@ -412,7 +433,7 @@ module.exports = async function (plugin) {
           const sendArr = [];
           nodeArr.forEach(item => {
             if (item.wresult) {
-              sendArr.push({ id: item.itemId, value: item.value.value.value, chstatus: 0, ts: Date.now() });
+              sendArr.push({ id: item.itemId, value: item.value.value.value, quality: 0, ts: Date.now() });
             }
           });
           if (sendArr.length > 0) plugin.sendData(sendArr);
@@ -526,6 +547,8 @@ module.exports = async function (plugin) {
     plugin.log('Client disconnected');
   }
 };
+
+
 
 async function timeout(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
