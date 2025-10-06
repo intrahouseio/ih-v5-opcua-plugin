@@ -12,7 +12,7 @@ const app = require('./app');
     const opt = getOptFromArgs();
     const pluginapi = opt && opt.pluginapi ? opt.pluginapi : 'ih-plugin-api';
     plugin = require(pluginapi+'/index.js')();
-    
+    plugin.opt = opt;
     plugin.log('Plugin opcua client has started.', 0);
 
     // Получить параметры 

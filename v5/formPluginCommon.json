@@ -62,28 +62,48 @@
       "title": "Buffer time, ms",
       "type": "number",
       "default": 500
+    },
+    {
+      "prop": "use_system_ts",
+      "title": "$use_system_ts",
+      "type": "cb",
+      "default": 0
     }
   ],
   "p2": [
-    {
-      "prop": "use_password",
-      "title": "$use_password",
-      "type": "cb",
-      "default": 0
+     {
+      "prop": "auth_type",
+      "title": "$auth_type",
+      "type": "droplist",
+      "data": [
+        {
+          "id": "Anonymous",
+          "title": "Anonymous"
+        },
+        {
+          "id": "UserName",
+          "title": "Username"
+        },
+        {
+          "id": "Certificate",
+          "title": "Certificate"
+        }  
+      ],
+      "default": "Anonymous"
     },
     {
       "prop": "userName",
       "title": "$userName",
       "type": "input",
       "default": "admin",
-      "hide": "!data.p2.use_password"
+      "hide": "data.p2.auth_type.id !== 'UserName' "
     },
     {
       "prop": "password",
       "title": "$password",
       "type": "password",
       "default": "password",
-      "hide": "!data.p2.use_password"
+      "hide": "data.p2.auth_type.id !== 'UserName' "
     },
     {
       "prop": "securityPolicy",
@@ -140,21 +160,45 @@
         },
         {
           "id": "Sign",
-          "title": "Sign"
+          "title": "Sign",
+          "hide": "data.p2.securityPolicy.id == 'None'"
         },
         {
           "id": "SignAndEncrypt",
-          "title": "SignAndEncrypt"
+          "title": "SignAndEncrypt",
+          "hide": "data.p2.securityPolicy.id == 'None'"
         }  
       ],
       "default": "None"
     },
     {
-      "prop": "use_system_ts",
-      "title": "$use_system_ts",
+      "prop": "autogen_cert",
+      "title": "$autogen_cert",
       "type": "cb",
-      "default": 0
+      "default": 1,
+      "hide": "data.p2.auth_type.id != 'Certificate'"
     },
+    {
+      "prop": "certDer",
+      "title": "$certDer",
+      "type": "input",
+      "default": "/home/pki/own/certs/certificate.der",
+      "hide": "data.p2.autogen_cert"
+    },
+    {
+      "prop": "privateKey",
+      "title": "$privateKey",
+      "type": "input",
+      "default": "/home/pki/own/private/private_key.pem",
+      "hide": "data.p2.autogen_cert"
+    },
+    {
+      "prop": "trust_cert",
+      "title": "$trust_cert",
+      "type": "cb",
+      "default": 1
+    },
+    
     {
       "prop": "restarttime",
       "title": "$Unit_Restarttime",

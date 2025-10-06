@@ -1,11 +1,15 @@
 {
     "port":"Port",
-    "use_password":"Use authentication",
+    "auth_type":"Authentification type",
     "userName":"User Name",
     "password":"Password",
     "use_redundancy": "Use Redundancy",
     "initialDelay": "Connection Timeout, ms",
     "maxRetry": "Retries",
     "wResult": "Return write result after a successful write",
-    "use_system_ts": "Use system time for ts"
+    "use_system_ts": "Use system time for ts",
+    "trust_cert": "Trust server certificate",
+    "autogen_cert": "Automatically generate a certificate",
+    "certDer": "Certificate DER format path",
+    "privateKey": "Private Key PEM format path"
 }

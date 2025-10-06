@@ -3,20 +3,22 @@
  */
 
 const util = require("util");
+const certmanager = require('./lib/certmanager');
 
 const {
   OPCUAClient,
   MessageSecurityMode,
   SecurityPolicy,
   AttributeIds,
-  StatusCodes,
+  UserTokenType,
   ClientSubscription,
   TimestampsToReturn,
   ClientMonitoredItemGroup,
   DataType,
   NodeId,
 } = require("node-opcua");
-
+const fs = require("fs").promises;
+const { createPrivateKey } = require("crypto");
 const { OPCUACertificateManager } = require('node-opcua-certificate-manager');
 
 const Scanner = require("./lib/scanner");
@@ -62,7 +64,10 @@ module.exports = async function (plugin) {
   async function connect(params) {
     const {
       endpointUrl,
-      use_password,
+      auth_type,
+      autogen_cert,
+      certDer,
+      privateKey,
       userName,
       password,
       securityPolicy,
@@ -79,18 +84,22 @@ module.exports = async function (plugin) {
       maxRetry,
       transportTimeout: 5000
     };
-
+    const { clientCM, privateKeyFile, certificateDerFile, certificateFile } = await certmanager.start(plugin, plugin.opt.pluginbasepath + "/" + plugin.opt.id || __dirname);
     if (!client) {
+
       client = OPCUAClient.create({
         applicationName: "IntraClient",
         connectionStrategy,
         securityMode: MessageSecurityMode[messageSecurityMode],
         securityPolicy: SecurityPolicy[securityPolicy],
         endpointMustExist: false,
-        clientCertificateManager: new OPCUACertificateManager({
+        certificateFile,
+        privateKeyFile,
+        clientCertificateManager: clientCM
+        /*clientCertificateManager: new OPCUACertificateManager({
           automaticallyAcceptUnknownCertificate: true,
           untrustUnknownCertificate: false
-        }),
+        }),*/
       });
 
       client.on("backoff", async (retry, delay) => {
@@ -130,11 +139,39 @@ module.exports = async function (plugin) {
       await client.connect(endpointUrl);
       plugin.log(`Connected to ${endpointUrl}`, 2);
 
-      if (use_password) {
-        session = await client.createSession({ userName, password });
-      } else {
-        session = await client.createSession();
+      /* if (use_password) {
+         session = await client.createSession({ userName, password });
+       } else {
+         session = await client.createSession();
+       }*/
+      let certificateData, privateKeyObject;
+      if (auth_type == 'Certificate') {
+        if (autogen_cert) {
+          certificateData = await fs.readFile(certificateDerFile);
+          // Преобразование приватного ключа в объект ключа
+          const privateKeyPem = await fs.readFile(privateKeyFile, "utf8");
+          privateKeyObject = createPrivateKey({
+            key: privateKeyPem,
+            format: "pem"
+          });
+        } else {
+          certificateData = await fs.readFile(certDer);
+          // Преобразование приватного ключа в объект ключа
+          const privateKeyPem = await fs.readFile(privateKey, "utf8");
+          privateKeyObject = createPrivateKey({
+            key: privateKeyPem,
+            format: "pem"
+          });
+        }
       }
+      const userIdentityInfo = {
+        type: UserTokenType[auth_type],
+        userName,
+        password,
+        certificateData,
+        privateKey: privateKeyObject
+      };
+      session = await client.createSession(userIdentityInfo);
       plugin.log("Session created!", 2);
 
       lastKeepAlive = Date.now();
@@ -353,7 +390,7 @@ module.exports = async function (plugin) {
             if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD') {
               value = wordsToBigInt(dataValue.value.value, 'UINT64')
             }
-            toSend.push({ id: item.id, value: value, quality: dataValue.statusCode._value, ts: use_system_ts ? Date.now() : ts });
+            toSend.push({ id: item.id, value: value, chstatus: dataValue.statusCode._value, quality: dataValue.statusCode._value, ts: use_system_ts ? Date.now() : ts });
           });
         });
       }
@@ -366,7 +403,7 @@ module.exports = async function (plugin) {
         plugin.log("Expected array of 2 elements ");
         return;
       }
-      const lo = arr[1] >>> 0; 
+      const lo = arr[1] >>> 0;
       const hi = arr[0] >>> 0;
 
       const buf = Buffer.alloc(8);
@@ -433,7 +470,7 @@ module.exports = async function (plugin) {
           const sendArr = [];
           nodeArr.forEach(item => {
             if (item.wresult) {
-              sendArr.push({ id: item.itemId, value: item.value.value.value, quality: 0, ts: Date.now() });
+              sendArr.push({ id: item.itemId, value: item.value.value.value, chstatus: 0, quality: 0, ts: Date.now() });
             }
           });
           if (sendArr.length > 0) plugin.sendData(sendArr);
@@ -544,7 +581,7 @@ module.exports = async function (plugin) {
     clearInterval(keepAliveTimeout);
     clearInterval(primaryCheckInterval);
     await client.disconnect();
-    plugin.log('Client disconnected');
+    plugin.log('Client disconnected', 2);
   }
 };
 
