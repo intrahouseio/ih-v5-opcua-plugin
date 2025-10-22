@@ -318,7 +318,7 @@ module.exports = async function (plugin) {
       groupChannels[key].ref.forEach((channel) => {
         itemsToMonitor.push({ nodeId: channel.chan, attributeId: AttributeIds.Value });
       });
-      if (key == undefined) {
+      if (key == "undefined") {
         parameters = {
           samplingInterval: samplingInterval || 100,
           discardOldest: discardOldest || true,
