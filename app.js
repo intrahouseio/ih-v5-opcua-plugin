@@ -3,54 +3,67 @@
  */
 
 const util = require("util");
-const certmanager = require('./lib/certmanager');
-
 const {
-  OPCUAClient,
-  MessageSecurityMode,
-  SecurityPolicy,
   AttributeIds,
-  UserTokenType,
   ClientSubscription,
   TimestampsToReturn,
   ClientMonitoredItemGroup,
   DataType,
   NodeId,
 } = require("node-opcua");
-const fs = require("fs").promises;
-const { createPrivateKey } = require("crypto");
-const { OPCUACertificateManager } = require('node-opcua-certificate-manager');
 
 const Scanner = require("./lib/scanner");
+const ConnectionManager = require("./lib/connectionManager");
 
 module.exports = async function (plugin) {
-  let client;
-  let session;
-  let subscription;
+  let subscriptions = [];
   let monitoredItemArr = [];
   let toSend = [];
   let curChannels = {};
   let T1;
-  let redundancy = 0;
-  let lastKeepAlive = Date.now();
-  let keepAliveTimeout;
-  let primaryCheckInterval;
-  let isSwitching = false;
 
+  const { buffertime, use_system_ts } = plugin.params.data;
+  const connectionManager = new ConnectionManager(plugin);
   const scanner = new Scanner(plugin);
 
+  // Инициализация connection manager callbacks
+  connectionManager.setOnRedundancySwitch(async (reason) => {
+    const switchSuccess = await connectionManager.switchToRedundant(
+      plugin.params.data, 
+      plugin.params.data.primaryCheckIntervalMs || 60000
+    );
+    if (!switchSuccess && reason === 'keepalive_timeout') {
+      plugin.exit();
+    }
+    return switchSuccess;
+  });
+
+  connectionManager.setOnConnectionLost((reason) => {
+    if (reason === 'no_redundancy' || reason === 'redundant_failed') {
+      plugin.exit();
+    }
+  });
+
+  connectionManager.setOnConnectionRestored(() => {
+    // Можно добавить логику при восстановлении соединения
+  });
+
+  // Инициализация плагина
   process.send({ type: 'procinfo', data: { redundancy_state: plugin.params.data.use_redundancy } });
   process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
-  process.send({ type: 'procinfo', data: { current_server: redundancy } });
+  process.send({ type: 'procinfo', data: { current_server: connectionManager.getRedundancyState() } });
+  
   plugin.onAct(async (data) => write(data));
   plugin.onCommand(async (data) => parseCommand(data));
 
   plugin.channels.onChange(async function (data) {
     monitoredItemArr.forEach(item => item.terminate());
+    subscriptions.forEach(sub => sub.terminate());
+    subscriptions = [];
     const channels = await plugin.channels.get();
     monitor(plugin.params.data, channels);
   });
-  const { buffertime, use_system_ts } = plugin.params.data;
+
   sendNext();
 
   function sendNext() {
@@ -61,130 +74,7 @@ module.exports = async function (plugin) {
     T1 = setTimeout(sendNext, buffertime || 500);
   }
 
-  async function connect(params) {
-    const {
-      endpointUrl,
-      auth_type,
-      autogen_cert,
-      certDer,
-      privateKey,
-      userName,
-      password,
-      securityPolicy,
-      messageSecurityMode,
-      initialDelay = 1000,
-      maxRetry = 3,
-      keepAliveTimeoutThreshold = 15000,
-      primaryCheckIntervalMs = 60000,
-      use_redundancy = 0
-    } = params;
-
-    const connectionStrategy = {
-      initialDelay,
-      maxRetry,
-      transportTimeout: 5000
-    };
-    const { clientCM, privateKeyFile, certificateDerFile, certificateFile } = await certmanager.start(plugin, plugin.opt.pluginbasepath + "/" + plugin.opt.id || __dirname);
-    if (!client) {
-
-      client = OPCUAClient.create({
-        applicationName: "IntraClient",
-        connectionStrategy,
-        securityMode: MessageSecurityMode[messageSecurityMode],
-        securityPolicy: SecurityPolicy[securityPolicy],
-        endpointMustExist: false,
-        certificateFile,
-        privateKeyFile,
-        clientCertificateManager: clientCM
-        /*clientCertificateManager: new OPCUACertificateManager({
-          automaticallyAcceptUnknownCertificate: true,
-          untrustUnknownCertificate: false
-        }),*/
-      });
-
-      client.on("backoff", async (retry, delay) => {
-        plugin.log(`Backoff on ${redundancy == 0 ? 'primary' : 'redundant'} server, retry ${retry}, next attempt in ${delay}ms`, 2);
-        if (retry >= maxRetry - 1) {
-          plugin.log(`Max retries (${maxRetry}) exceeded on ${redundancy == 0 ? 'primary' : 'redundant'} server`, 2);
-          await client.disconnect();
-          plugin.log(`Disconnected from ${redundancy == 0 ? 'primary' : 'redundant'} server`, 2);
-          if (redundancy == 0 && use_redundancy == 1) {
-            plugin.log(`Initiating switch to redundant server`, 2);
-            isSwitching = true;
-            await switchToRedundant(primaryCheckIntervalMs);
-          } else {
-            plugin.log(`No further redundancy available, exiting`, 2);
-            plugin.exit();
-          }
-        }
-      });
-
-      client.on("connection_lost", async () => {
-        plugin.log("Connection lost!", 2);
-        if (redundancy == 0 && plugin.params.data.use_redundancy == 1 && !isSwitching) {
-          plugin.log(`Connection lost on primary server, switching to redundant`, 2);
-          isSwitching = true;
-          await client.disconnect();
-          await switchToRedundant(plugin.params.data.primaryCheckIntervalMs || 60000);
-        }
-      });
-
-      client.on("connection_reestablished", () => {
-        plugin.log("Connection re-established", 2);
-      });
-    }
-
-    try {
-      plugin.log(`Attempting to connect to ${endpointUrl}`, 2);
-      await client.connect(endpointUrl);
-      plugin.log(`Connected to ${endpointUrl}`, 2);
-
-      /* if (use_password) {
-         session = await client.createSession({ userName, password });
-       } else {
-         session = await client.createSession();
-       }*/
-      let certificateData, privateKeyObject;
-      if (auth_type == 'Certificate') {
-        if (autogen_cert) {
-          certificateData = await fs.readFile(certificateDerFile);
-          // Преобразование приватного ключа в объект ключа
-          const privateKeyPem = await fs.readFile(privateKeyFile, "utf8");
-          privateKeyObject = createPrivateKey({
-            key: privateKeyPem,
-            format: "pem"
-          });
-        } else {
-          certificateData = await fs.readFile(certDer);
-          // Преобразование приватного ключа в объект ключа
-          const privateKeyPem = await fs.readFile(privateKey, "utf8");
-          privateKeyObject = createPrivateKey({
-            key: privateKeyPem,
-            format: "pem"
-          });
-        }
-      }
-      const userIdentityInfo = {
-        type: UserTokenType[auth_type],
-        userName,
-        password,
-        certificateData,
-        privateKey: privateKeyObject
-      };
-      session = await client.createSession(userIdentityInfo);
-      plugin.log("Session created!", 2);
-
-      lastKeepAlive = Date.now();
-      startKeepAliveCheck(keepAliveTimeoutThreshold);
-      return 1;
-    } catch (err) {
-      plugin.log(`Error occurred during connect: ${util.inspect(err)} (redundancy: ${redundancy})`, 2);
-      await client.disconnect();
-      return 0;
-    }
-  }
-
-  function subscribe(params) {
+  function subscribe(params, subscriptionId = null) {
     const {
       requestedPublishingInterval = 1000,
       requestedLifetimeCount = 100,
@@ -194,7 +84,8 @@ module.exports = async function (plugin) {
     } = params;
 
     try {
-      subscription = ClientSubscription.create(session, {
+      const session = connectionManager.getSession();
+      const subscription = ClientSubscription.create(session, {
         requestedPublishingInterval,
         requestedLifetimeCount,
         requestedMaxKeepAliveCount,
@@ -203,220 +94,214 @@ module.exports = async function (plugin) {
         priority,
       });
 
+      subscriptions.push(subscription);
+
       subscription
         .on("started", () => {
-          plugin.log(`Subscription started - subscriptionId=${subscription.subscriptionId}`, 1);
+          plugin.log(`Subscription ${subscription.subscriptionId} started - subscriptionId=${subscription.subscriptionId}`, 1);
         })
         .on("keepalive", () => {
-          plugin.log("Keepalive received", 2);
-          lastKeepAlive = Date.now();
+          plugin.log(`Keepalive received from subscription ${subscription.subscriptionId}`, 2);
+          connectionManager.updateKeepAlive();
         })
         .on("terminated", () => {
-          plugin.log("Subscription terminated", 2);
+          plugin.log(`Subscription ${subscription.subscriptionId} terminated`, 2);
+          const index = subscriptions.indexOf(subscription);
+          if (index > -1) {
+            subscriptions.splice(index, 1);
+          }
         });
+
+      return subscription;
     } catch (err) {
       plugin.log(`Subscription error: ${util.inspect(err)}`, 2);
+      return null;
     }
-  }
-
-  function startKeepAliveCheck(timeoutThreshold) {
-    clearInterval(keepAliveTimeout);
-    keepAliveTimeout = setInterval(() => {
-      const timeSinceLastKeepAlive = Date.now() - lastKeepAlive;
-      const maxAllowed = (plugin.params.data.requestedMaxKeepAliveCount || 10) * (plugin.params.data.requestedPublishingInterval || 1000) * 1.5;
-      if (timeSinceLastKeepAlive > Math.max(timeoutThreshold, maxAllowed)) {
-        plugin.log(`No keepalive for ${timeSinceLastKeepAlive}ms, exceeding threshold ${Math.max(timeoutThreshold, maxAllowed)}ms`, 2);
-        handleKeepAliveTimeout();
-      }
-    }, 5000);
-  }
-
-  async function handleKeepAliveTimeout() {
-    if (isSwitching) return;
-    plugin.log(`Keepalive timeout detected on ${redundancy == 0 ? 'primary' : 'redundant'} server`, 2);
-    if (redundancy == 0 && plugin.params.data.use_redundancy == 1) {
-      isSwitching = true;
-      clearInterval(keepAliveTimeout);
-      await client.disconnect();
-      plugin.log("Disconnected due to keepalive timeout", 2);
-      const switchSuccess = await switchToRedundant(plugin.params.data.primaryCheckIntervalMs || 60000);
-      if (!switchSuccess) {
-        plugin.log("Failed to connect to redundant server after keepalive timeout, exiting", 2);
-        plugin.exit();
-      }
-    } else {
-      plugin.log(`Keepalive timeout on ${redundancy == 0 ? 'primary' : 'redundant'} server, continuing operation`, 2);
-      lastKeepAlive = Date.now();
-    }
-  }
-
-  async function switchToRedundant(primaryCheckIntervalMs) {
-    if (!isSwitching) return false;
-    plugin.params.data.endpointUrl = plugin.params.data.redundancy_endpointUrl;
-    redundancy = 1;
-    process.send({ type: 'procinfo', data: { current_server: redundancy } });
-    process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
-    plugin.log("Switching to redundant server", 2);
-    const status = await main(plugin.params.data);
-    if (status) {
-      startPrimaryServerCheck(primaryCheckIntervalMs);
-      isSwitching = false;
-      return true;
-    } else {
-      isSwitching = false;
-      return false;
-    }
-  }
-
-  async function switchToPrimary() {
-    if (isSwitching) return;
-    isSwitching = true;
-    await client.disconnect();
-    plugin.log("Disconnected from redundant server", 2);
-    plugin.params.data.endpointUrl = plugin.params.data.primary_endpointUrl;
-    redundancy = 0;
-    process.send({ type: 'procinfo', data: { current_server: redundancy } });
-    process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
-    plugin.log("Switching back to primary server", 2);
-    await main(plugin.params.data);
-    isSwitching = false;
-  }
-
-  function startPrimaryServerCheck(intervalMs) {
-    clearInterval(primaryCheckInterval);
-    primaryCheckInterval = setInterval(async () => {
-      if (redundancy === 1 && !isSwitching) {
-        try {
-          const testClient = OPCUAClient.create({
-            applicationName: "IntraClientTest",
-            endpointMustExist: false,
-            clientCertificateManager: new OPCUACertificateManager({
-              automaticallyAcceptUnknownCertificate: true,
-              untrustUnknownCertificate: false
-            }),
-          });
-          await testClient.connect(plugin.params.data.primary_endpointUrl);
-          plugin.log("Primary server is available, initiating switch back", 2);
-          await testClient.disconnect();
-          clearInterval(primaryCheckInterval);
-          await switchToPrimary();
-        } catch (err) {
-          plugin.log(`Primary server still unavailable: ${util.inspect(err)}`, 2);
-        }
-      }
-    }, intervalMs || 60000);
   }
 
   function monitor(params, channels) {
     const groupChannels = groupByUniq(channels, 'parentnodefolder');
     curChannels = groupBy(channels, 'chan');
-    let parameters = {};
-    const { samplingInterval, discardOldest, queueSize, maxVariablesPerSub } = params;
+    
+    const { samplingInterval, discardOldest, queueSize, maxVariablesSub, maxVariablesMon } = params;
+    const maxChannelsPerSubscription = maxVariablesSub || 1000;
 
+    const allItemsToMonitor = [];
+    
     Object.keys(groupChannels).forEach(key => {
-      const itemsToMonitor = [];
-      groupChannels[key].ref.forEach((channel) => {
-        itemsToMonitor.push({ nodeId: channel.chan, attributeId: AttributeIds.Value });
-      });
+      let parameters = {};
       if (key == "undefined") {
         parameters = {
           samplingInterval: samplingInterval || 100,
           discardOldest: discardOldest || true,
           queueSize: queueSize || 10,
-          maxVariablesPerSub: maxVariablesPerSub || 100
+          maxVariablesMon: maxVariablesMon || 100
         };
       } else {
         parameters = {
           samplingInterval: groupChannels[key].ref[0].parentsamplingInterval || 100,
           discardOldest: groupChannels[key].ref[0].parentdiscardOldest || true,
           queueSize: groupChannels[key].ref[0].parentqueueSize || 10,
-          maxVariablesPerSub: maxVariablesPerSub || 100
+          maxVariablesMon: maxVariablesMon || 100
         };
       }
 
-      while (itemsToMonitor.length > 0) {
-        let chunk = itemsToMonitor.splice(0, parameters.maxVariablesPerSub);
-        const monitoredItem = ClientMonitoredItemGroup.create(
-          subscription,
-          chunk,
-          parameters,
-          TimestampsToReturn.Both
-        );
-        monitoredItemArr.push(monitoredItem);
-      }
+      groupChannels[key].ref.forEach((channel) => {
+        allItemsToMonitor.push({
+          nodeId: channel.chan,
+          attributeId: AttributeIds.Value,
+          parameters: parameters
+        });
+      });
     });
 
-    try {
-      for (let i = 0; i < monitoredItemArr.length; i++) {
-        monitoredItemArr[i].on('err', (monitorItem, dataValue) => {
-          plugin.log(`monitorItem ${monitorItem} dataValue ${dataValue}`, 2);
-        });
-        monitoredItemArr[i].on("changed", (monitorItem, dataValue) => {
-          lastKeepAlive = Date.now();
-          let identifierString;
-          switch (monitorItem.itemToMonitor.nodeId.identifierType) {
-            case 1: identifierString = ';i='; break;
-            case 2: identifierString = ';s='; break;
-            case 3: identifierString = ';g='; break;
-            case 4: identifierString = ';b='; break;
-            default: identifierString = String(monitorItem.itemToMonitor.nodeId.identifierType); break;
-          }
-          let chanId;
-          let ts;
-          let value;
-          if (identifierString == ';b=') {
-            chanId = "ns=" +
-              monitorItem.itemToMonitor.nodeId.namespace +
-              identifierString +
-              monitorItem.itemToMonitor.nodeId.value.toString('base64');
-          } else {
-            chanId = "ns=" +
-              monitorItem.itemToMonitor.nodeId.namespace +
-              identifierString +
-              monitorItem.itemToMonitor.nodeId.value;
-          }
-          ts = new Date(dataValue.sourceTimestamp).getTime();
-          if (typeof dataValue.value.value === 'object') {
-            value = JSON.stringify(dataValue.value.value);
-          } else if (typeof dataValue.value.value == "boolean") {
-            value = dataValue.value.value == true ? 1 : 0;
-          } else {
-            value = dataValue.value.value;
-          }
-          curChannels[chanId].ref.forEach(item => {
-            if (item.dataType.toUpperCase() == 'INT64' || item.dataType.toUpperCase() == 'LINT') {
-              value = wordsToBigInt(dataValue.value.value, 'INT64')
-            }
-            if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD') {
-              value = wordsToBigInt(dataValue.value.value, 'UINT64')
-            }
-            toSend.push({ id: item.id, value: value, chstatus: dataValue.statusCode._value, quality: dataValue.statusCode._value, ts: use_system_ts ? Date.now() : ts });
+    plugin.log(`Total items to monitor: ${allItemsToMonitor.length}, max per subscription: ${maxChannelsPerSubscription}`, 1);
+
+    const subscriptionGroups = [];
+    
+    for (let i = 0; i < allItemsToMonitor.length; i += maxChannelsPerSubscription) {
+      const group = allItemsToMonitor.slice(i, i + maxChannelsPerSubscription);
+      subscriptionGroups.push(group);
+    }
+
+    plugin.log(`Created ${subscriptionGroups.length} subscription groups`, 1);
+
+    subscriptionGroups.forEach((group, index) => {
+      createSubscriptionWithItems(group, index);
+    });
+
+    plugin.log(`Created ${subscriptions.length} subscriptions for ${allItemsToMonitor.length} channels`, 1);
+  }
+
+  function createSubscriptionWithItems(items, subscriptionIndex) {
+    if (items.length === 0) return;
+
+    const itemsByParams = {};
+    items.forEach(item => {
+      const paramsKey = JSON.stringify(item.parameters);
+      if (!itemsByParams[paramsKey]) {
+        itemsByParams[paramsKey] = {
+          parameters: item.parameters,
+          items: []
+        };
+      }
+      itemsByParams[paramsKey].items.push({
+        nodeId: item.nodeId,
+        attributeId: item.attributeId
+      });
+    });
+
+    const subscription = subscribe(plugin.params.data, subscriptionIndex);
+    if (!subscription) {
+      plugin.log(`Failed to create subscription ${subscriptionIndex}`, 2);
+      return;
+    }
+
+    Object.values(itemsByParams).forEach((group, groupIndex) => {
+      const { items: groupItems, parameters } = group;
+      
+      if (groupItems.length > 0) {
+        try {
+          const monitoredItem = ClientMonitoredItemGroup.create(
+            subscription,
+            groupItems,
+            parameters,
+            TimestampsToReturn.Both
+          );
+          
+          monitoredItemArr.push(monitoredItem);
+
+          monitoredItem.on('err', (monitorItem, dataValue) => {
+            plugin.log(`monitorItem error: ${monitorItem} dataValue: ${dataValue}`, 2);
           });
+          
+          monitoredItem.on("changed", (monitorItem, dataValue) => {
+            connectionManager.updateKeepAlive();
+            handleDataChange(monitorItem, dataValue);
+          });
+          
+          plugin.log(`Created monitored item group ${groupIndex} with ${groupItems.length} items in subscription ${subscriptionIndex}`, 2);
+        } catch (err) {
+          plugin.log(`Error creating monitored item group: ${util.inspect(err)}`, 2);
+        }
+      }
+    });
+  }
+
+  function handleDataChange(monitorItem, dataValue) {
+    let identifierString;
+    switch (monitorItem.itemToMonitor.nodeId.identifierType) {
+      case 1: identifierString = ';i='; break;
+      case 2: identifierString = ';s='; break;
+      case 3: identifierString = ';g='; break;
+      case 4: identifierString = ';b='; break;
+      default: identifierString = String(monitorItem.itemToMonitor.nodeId.identifierType); break;
+    }
+    
+    let chanId;
+    let ts;
+    let value;
+    
+    if (identifierString == ';b=') {
+      chanId = "ns=" +
+        monitorItem.itemToMonitor.nodeId.namespace +
+        identifierString +
+        monitorItem.itemToMonitor.nodeId.value.toString('base64');
+    } else {
+      chanId = "ns=" +
+        monitorItem.itemToMonitor.nodeId.namespace +
+        identifierString +
+        monitorItem.itemToMonitor.nodeId.value;
+    }
+    
+    ts = new Date(dataValue.sourceTimestamp).getTime();
+    if (typeof dataValue.value.value === 'object') {
+      value = JSON.stringify(dataValue.value.value);
+    } else if (typeof dataValue.value.value == "boolean") {
+      value = dataValue.value.value == true ? 1 : 0;
+    } else {
+      value = dataValue.value.value;
+    }
+    
+    if (curChannels[chanId] && curChannels[chanId].ref) {
+      curChannels[chanId].ref.forEach(item => {
+        if (item.dataType.toUpperCase() == 'INT64' || item.dataType.toUpperCase() == 'LINT') {
+          value = wordsToBigInt(dataValue.value.value, 'INT64')
+        }
+        if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD') {
+          value = wordsToBigInt(dataValue.value.value, 'UINT64')
+        }
+        toSend.push({ 
+          id: item.id, 
+          value: value, 
+          chstatus: dataValue.statusCode._value, 
+          quality: dataValue.statusCode._value, 
+          ts: use_system_ts ? Date.now() : ts 
         });
-      }
-    } catch (err) {
-      plugin.log(`Monitor error: ${util.inspect(err)}`, 2);
+      });
     }
+  }
 
-    function wordsToBigInt(arr, type) {
-      if (!Array.isArray(arr) || arr.length !== 2) {
-        plugin.log("Expected array of 2 elements ");
-        return;
-      }
-      const lo = arr[1] >>> 0;
-      const hi = arr[0] >>> 0;
-
-      const buf = Buffer.alloc(8);
-      buf.writeUInt32LE(lo, 0);
-      buf.writeUInt32LE(hi, 4);
-      if (type.toUpperCase() == 'INT64') return String(buf.readBigInt64LE(0));
-      if (type.toUpperCase() == 'UINT64') return String(buf.readBigUint64LE(0));
+  function wordsToBigInt(arr, type) {
+    if (!Array.isArray(arr) || arr.length !== 2) {
+      plugin.log("Expected array of 2 elements ");
+      return;
     }
+    const lo = arr[1] >>> 0;
+    const hi = arr[0] >>> 0;
+
+    const buf = Buffer.alloc(8);
+    buf.writeUInt32LE(lo, 0);
+    buf.writeUInt32LE(hi, 4);
+    if (type.toUpperCase() == 'INT64') return String(buf.readBigInt64LE(0));
+    if (type.toUpperCase() == 'UINT64') return String(buf.readBigUint64LE(0));
   }
 
   async function write(data) {
     plugin.log(util.inspect(data), 2);
+    const session = connectionManager.getSession();
     let nodeArr = [];
+    
     for (let i = 0; i < data.data.length; i++) {
       const element = data.data[i];
       if (element.dataType == 'Method') {
@@ -463,6 +348,7 @@ module.exports = async function (plugin) {
         });
       }
     }
+    
     if (nodeArr.length > 0) {
       session.write(nodeArr, (err, statusCode) => {
         if (!err) {
@@ -483,7 +369,9 @@ module.exports = async function (plugin) {
 
   async function parseCommand(message) {
     plugin.log(`Command '${message.command}' received. Data: ${util.inspect(message)}`, 2);
+    const session = connectionManager.getSession();
     let payload = {};
+    
     try {
       if (message.command == 'syncHistory') {
         const nodesObj = {};
@@ -543,14 +431,14 @@ module.exports = async function (plugin) {
     if (!connectionParams.primary_endpointUrl) {
       connectionParams.primary_endpointUrl = connectionParams.endpointUrl;
     }
-    const status = await connect(connectionParams);
+    const status = await connectionManager.connect(connectionParams);
     if (status) {
-      subscribe(plugin.params.data);
       monitor(plugin.params.data, plugin.channels.data);
     }
-    return status; // Возвращаем статус подключения
+    return status;
   }
 
+  // Запуск основной логики
   main(plugin.params.data);
 
   plugin.onScan((scanObj) => {
@@ -558,7 +446,7 @@ module.exports = async function (plugin) {
     if (scanObj.stop) {
       //
     } else {
-      scanner.request(session, scanObj.uuid);
+      scanner.request(connectionManager.getSession(), scanObj.uuid);
     }
   });
 
@@ -578,14 +466,12 @@ module.exports = async function (plugin) {
   }
 
   async function terminate() {
-    clearInterval(keepAliveTimeout);
-    clearInterval(primaryCheckInterval);
-    await client.disconnect();
-    plugin.log('Client disconnected', 2);
+    monitoredItemArr.forEach(item => item.terminate());
+    subscriptions.forEach(sub => sub.terminate());
+    subscriptions = [];
+    await connectionManager.terminate();
   }
 };
-
-
 
 async function timeout(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

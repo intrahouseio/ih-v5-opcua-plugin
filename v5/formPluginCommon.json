@@ -209,10 +209,10 @@
   ],
   "p3": [
     {
-      "prop": "maxVariablesPerSub",
+      "prop": "maxVariablesSub",
       "title": "Max Variables Per Subscription",
       "type": "number",
-      "default": 100
+      "default": 4000
     },
     {
       "prop": "requestedPublishingInterval",
@@ -246,6 +246,12 @@
     }
   ],
   "p4": [
+    {
+      "prop": "maxVariablesMon",
+      "title": "Max Variables Per Monitor Group",
+      "type": "number",
+      "default": 100
+    },
     {
       "prop": "samplingInterval",
       "title": "Sampling Interval",
