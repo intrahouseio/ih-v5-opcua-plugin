@@ -20,7 +20,51 @@
       "default": 100
     },  
     { "prop": "parentqueueSize", "title": "Queue Sizee", "type": "number", "default": 10 },
-    { "prop": "parentdiscardOldest", "title": "Discard Oldest", "type": "cb", "default": 1 }
+    { "prop": "parentdiscardOldest", "title": "Discard Oldest", "type": "cb", "default": 1 },
+    { "prop": "dataChangeFilter", "title": "Use Data Change Filter", "type": "cb", "default": 0 },
+    {
+      "prop": "parentfilterDataChangeTrigger",
+      "title": "Data Change Trigger",
+      "type": "droplist",
+      "data": [
+        {
+          "id": 0,
+          "title": "Status"
+        },
+        {
+          "id": 1,
+          "title": "Status/Value"
+        },
+        {
+          "id": 2,
+          "title": "Status/Value/Timestamp"
+        }  
+      ],
+      "default": 1,
+      "hide": "!data.p2.dataChangeFilter"
+    },
+    {
+      "prop": "parentfilterDeadbandType",
+      "title": "Filter Deadband Type",
+      "type": "droplist",
+      "data": [
+        {
+          "id": 0,
+          "title": "None"
+        },
+        {
+          "id": 1,
+          "title": "Absolute"
+        },
+        {
+          "id": 2,
+          "title": "Percent"
+        } 
+      ],
+      "default": 1,
+      "hide": "!data.p2.dataChangeFilter"
+    },
+    { "prop": "parentfilterDeadbandValue", "title": "Deadband Value", "type": "number", "default": 1, "hide": "!data.p2.dataChangeFilter" } 
   ],
 
   "p3": [{ "prop": "txt", "title": "Comment", "type": "textarea" }]

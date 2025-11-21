@@ -5,7 +5,15 @@
   "restartOnChannelsChange": 0,
   "innerId": 1,
   "linkChstatus":1,
-  "share_node_folder_fields":["parentsamplingInterval", "parentdiscardOldest", "parentqueueSize"],
+  "share_node_folder_fields":[
+      "parentsamplingInterval", 
+      "parentdiscardOldest", 
+      "parentqueueSize", 
+      "dataChangeFilter",
+      "parentfilterDataChangeTrigger", 
+      "parentfilterDeadbandType",
+      "parentfilterDeadbandValue"
+    ],
 
   "channel_folder_popup": {
     "add":[
@@ -20,9 +28,13 @@
   "default_channel_node_folder": {
     "foldertype": "node",
     "chan": "$NewNode",
-    "parentsamplingInterval":100,
+    "parentsamplingInterval":500,
     "parentdiscardOldest": 1,
-    "parentqueueSize": 10
+    "parentqueueSize": 10,
+    "dataChangeFilter": 0,
+    "parentfilterDataChangeTrigger": 1,
+    "parentfilterDeadbandType": 1,
+    "parentfilterDeadbandValue": 1
   },
   "ext": [{ "prop": "redundancy_state", "note": "Redundancy state", "vtype": "N" },
             { "prop": "current_server", "note": "Current server", "vtype": "N" },

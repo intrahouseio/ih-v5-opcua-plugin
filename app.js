@@ -8,6 +8,7 @@ const {
   ClientSubscription,
   TimestampsToReturn,
   ClientMonitoredItemGroup,
+  DataChangeFilter,
   DataType,
   NodeId,
 } = require("node-opcua");
@@ -29,7 +30,7 @@ module.exports = async function (plugin) {
   // Инициализация connection manager callbacks
   connectionManager.setOnRedundancySwitch(async (reason) => {
     const switchSuccess = await connectionManager.switchToRedundant(
-      plugin.params.data, 
+      plugin.params.data,
       plugin.params.data.primaryCheckIntervalMs || 60000
     );
     if (!switchSuccess && reason === 'keepalive_timeout') {
@@ -47,17 +48,17 @@ module.exports = async function (plugin) {
   connectionManager.setOnConnectionRestored(() => {
     // Можно добавить логику при восстановлении соединения
   });
-
+  connectionManager._sendProcInfo();
   // Инициализация плагина
   process.send({ type: 'procinfo', data: { redundancy_state: plugin.params.data.use_redundancy } });
   process.send({ type: 'procinfo', data: { current_endpoint: plugin.params.data.endpointUrl } });
   process.send({ type: 'procinfo', data: { current_server: connectionManager.getRedundancyState() } });
-  
+
   plugin.onAct(async (data) => write(data));
   plugin.onCommand(async (data) => parseCommand(data));
 
   plugin.channels.onChange(async function (data) {
-    monitoredItemArr.forEach(item => item.terminate());
+    //monitoredItemArr.forEach(item => item.terminate());
     subscriptions.forEach(sub => sub.terminate());
     subscriptions = [];
     const channels = await plugin.channels.get();
@@ -122,28 +123,47 @@ module.exports = async function (plugin) {
   function monitor(params, channels) {
     const groupChannels = groupByUniq(channels, 'parentnodefolder');
     curChannels = groupBy(channels, 'chan');
-    
     const { samplingInterval, discardOldest, queueSize, maxVariablesSub, maxVariablesMon } = params;
-    const maxChannelsPerSubscription = maxVariablesSub || 1000;
+    const maxChannelsPerSubscription = maxVariablesSub || 4000;
 
     const allItemsToMonitor = [];
-    
+
     Object.keys(groupChannels).forEach(key => {
       let parameters = {};
       if (key == "undefined") {
         parameters = {
           samplingInterval: samplingInterval || 100,
-          discardOldest: discardOldest || true,
+          discardOldest: discardOldest == 1,
           queueSize: queueSize || 10,
           maxVariablesMon: maxVariablesMon || 100
         };
       } else {
-        parameters = {
-          samplingInterval: groupChannels[key].ref[0].parentsamplingInterval || 100,
-          discardOldest: groupChannels[key].ref[0].parentdiscardOldest || true,
-          queueSize: groupChannels[key].ref[0].parentqueueSize || 10,
-          maxVariablesMon: maxVariablesMon || 100
-        };
+
+        if (groupChannels[key].ref[0].dataChangeFilter) {
+          const deadbandType = groupChannels[key].ref[0].parentfilterDeadbandType || 1
+          const deadbandValue = groupChannels[key].ref[0].parentfilterDeadbandValue || 1
+          const trigger = groupChannels[key].ref[0].parentfilterDataChangeTrigger || 1
+          const filter = new DataChangeFilter({
+            trigger,
+            deadbandType,
+            deadbandValue
+          })
+
+          parameters = {
+            samplingInterval: groupChannels[key].ref[0].parentsamplingInterval || 100,
+            discardOldest: groupChannels[key].ref[0].parentdiscardOldest == 1,
+            queueSize: groupChannels[key].ref[0].parentqueueSize || 10,
+            maxVariablesMon: maxVariablesMon || 100,
+            filter
+          };
+        } else {
+          parameters = {
+            samplingInterval: groupChannels[key].ref[0].parentsamplingInterval || 100,
+            discardOldest: groupChannels[key].ref[0].parentdiscardOldest == 1,
+            queueSize: groupChannels[key].ref[0].parentqueueSize || 10,
+            maxVariablesMon: maxVariablesMon || 100
+          };
+        }
       }
 
       groupChannels[key].ref.forEach((channel) => {
@@ -158,7 +178,7 @@ module.exports = async function (plugin) {
     plugin.log(`Total items to monitor: ${allItemsToMonitor.length}, max per subscription: ${maxChannelsPerSubscription}`, 1);
 
     const subscriptionGroups = [];
-    
+
     for (let i = 0; i < allItemsToMonitor.length; i += maxChannelsPerSubscription) {
       const group = allItemsToMonitor.slice(i, i + maxChannelsPerSubscription);
       subscriptionGroups.push(group);
@@ -187,7 +207,7 @@ module.exports = async function (plugin) {
       }
       itemsByParams[paramsKey].items.push({
         nodeId: item.nodeId,
-        attributeId: item.attributeId
+        attributeId: item.attributeId,
       });
     });
 
@@ -199,7 +219,7 @@ module.exports = async function (plugin) {
 
     Object.values(itemsByParams).forEach((group, groupIndex) => {
       const { items: groupItems, parameters } = group;
-      
+
       if (groupItems.length > 0) {
         try {
           const monitoredItem = ClientMonitoredItemGroup.create(
@@ -208,18 +228,18 @@ module.exports = async function (plugin) {
             parameters,
             TimestampsToReturn.Both
           );
-          
+
           monitoredItemArr.push(monitoredItem);
 
           monitoredItem.on('err', (monitorItem, dataValue) => {
             plugin.log(`monitorItem error: ${monitorItem} dataValue: ${dataValue}`, 2);
           });
-          
+
           monitoredItem.on("changed", (monitorItem, dataValue) => {
             connectionManager.updateKeepAlive();
             handleDataChange(monitorItem, dataValue);
           });
-          
+
           plugin.log(`Created monitored item group ${groupIndex} with ${groupItems.length} items in subscription ${subscriptionIndex}`, 2);
         } catch (err) {
           plugin.log(`Error creating monitored item group: ${util.inspect(err)}`, 2);
@@ -237,11 +257,11 @@ module.exports = async function (plugin) {
       case 4: identifierString = ';b='; break;
       default: identifierString = String(monitorItem.itemToMonitor.nodeId.identifierType); break;
     }
-    
+
     let chanId;
     let ts;
     let value;
-    
+
     if (identifierString == ';b=') {
       chanId = "ns=" +
         monitorItem.itemToMonitor.nodeId.namespace +
@@ -253,7 +273,7 @@ module.exports = async function (plugin) {
         identifierString +
         monitorItem.itemToMonitor.nodeId.value;
     }
-    
+
     ts = new Date(dataValue.sourceTimestamp).getTime();
     if (typeof dataValue.value.value === 'object') {
       value = JSON.stringify(dataValue.value.value);
@@ -262,7 +282,7 @@ module.exports = async function (plugin) {
     } else {
       value = dataValue.value.value;
     }
-    
+
     if (curChannels[chanId] && curChannels[chanId].ref) {
       curChannels[chanId].ref.forEach(item => {
         if (item.dataType.toUpperCase() == 'INT64' || item.dataType.toUpperCase() == 'LINT') {
@@ -271,12 +291,13 @@ module.exports = async function (plugin) {
         if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD') {
           value = wordsToBigInt(dataValue.value.value, 'UINT64')
         }
-        toSend.push({ 
-          id: item.id, 
-          value: value, 
-          chstatus: dataValue.statusCode._value, 
-          quality: dataValue.statusCode._value, 
-          ts: use_system_ts ? Date.now() : ts 
+        toSend.push({
+          chanId,
+          id: item.id,
+          value: value,
+          chstatus: dataValue.statusCode._value,
+          quality: dataValue.statusCode._value,
+          ts: use_system_ts ? Date.now() : ts
         });
       });
     }
@@ -301,7 +322,7 @@ module.exports = async function (plugin) {
     plugin.log(util.inspect(data), 2);
     const session = connectionManager.getSession();
     let nodeArr = [];
-    
+
     for (let i = 0; i < data.data.length; i++) {
       const element = data.data[i];
       if (element.dataType == 'Method') {
@@ -348,7 +369,7 @@ module.exports = async function (plugin) {
         });
       }
     }
-    
+
     if (nodeArr.length > 0) {
       session.write(nodeArr, (err, statusCode) => {
         if (!err) {
@@ -371,7 +392,7 @@ module.exports = async function (plugin) {
     plugin.log(`Command '${message.command}' received. Data: ${util.inspect(message)}`, 2);
     const session = connectionManager.getSession();
     let payload = {};
-    
+
     try {
       if (message.command == 'syncHistory') {
         const nodesObj = {};
