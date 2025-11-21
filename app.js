@@ -237,6 +237,7 @@ module.exports = async function (plugin) {
 
           monitoredItem.on("changed", (monitorItem, dataValue) => {
             connectionManager.updateKeepAlive();
+            plugin.log("dataValue " + util.inspect(dataValue));
             handleDataChange(monitorItem, dataValue);
           });
 
@@ -285,10 +286,10 @@ module.exports = async function (plugin) {
 
     if (curChannels[chanId] && curChannels[chanId].ref) {
       curChannels[chanId].ref.forEach(item => {
-        if (item.dataType.toUpperCase() == 'INT64' || item.dataType.toUpperCase() == 'LINT') {
+        if (item.dataType.toUpperCase() == 'INT64' || item.dataType.toUpperCase() == 'LINT' || dataValue.value.dataType == 8) {
           value = wordsToBigInt(dataValue.value.value, 'INT64')
         }
-        if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD') {
+        if (item.dataType.toUpperCase() == 'UINT64' || item.dataType.toUpperCase() == 'LWORD' || dataValue.value.dataType == 9) {
           value = wordsToBigInt(dataValue.value.value, 'UINT64')
         }
         toSend.push({
