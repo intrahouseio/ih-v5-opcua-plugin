@@ -237,7 +237,7 @@ module.exports = async function (plugin) {
 
           monitoredItem.on("changed", (monitorItem, dataValue) => {
             connectionManager.updateKeepAlive();
-            plugin.log("dataValue " + util.inspect(dataValue));
+            //plugin.log("dataValue " + util.inspect(dataValue));
             handleDataChange(monitorItem, dataValue);
           });
 
@@ -393,7 +393,7 @@ module.exports = async function (plugin) {
     plugin.log(`Command '${message.command}' received. Data: ${util.inspect(message)}`, 2);
     const session = connectionManager.getSession();
     let payload = {};
-
+    
     try {
       if (message.command == 'syncHistory') {
         const nodesObj = {};
@@ -401,8 +401,9 @@ module.exports = async function (plugin) {
         message.data.chanarr.forEach(item => {
           nodesObj[item.chan] = item.id;
           nodes.push(item.chan);
+          
         });
-
+        
         const startTime = new Date(message.data.startTime).toISOString();
         const endTime = new Date(message.data.endTime).toISOString();
         const result = await session.readHistoryValue(nodes, startTime, endTime);
@@ -473,6 +474,7 @@ module.exports = async function (plugin) {
   });
 
   if (plugin.onScanexpand) plugin.onScanexpand((scanObj) => {
+    //plugin.log("scanObj "+ util.inspect(scanObj))
     scanner.scanExpand(scanObj);
   });
 
