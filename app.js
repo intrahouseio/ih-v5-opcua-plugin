@@ -22,6 +22,8 @@ module.exports = async function (plugin) {
   let toSend = [];
   let curChannels = {};
   let T1;
+  let historyQueue = [];
+  let isProcessingHistory = false;
 
   const { buffertime, use_system_ts } = plugin.params.data;
   const connectionManager = new ConnectionManager(plugin);
@@ -388,37 +390,82 @@ module.exports = async function (plugin) {
       });
     }
   }
+  // ===================== HISTORY QUEUE =====================
 
-  async function parseCommand(message) {
-    plugin.log(`Command '${message.command}' received. Data: ${util.inspect(message)}`, 2);
-    const session = connectionManager.getSession();
-    let payload = {};
-    
-    try {
-      if (message.command == 'syncHistory') {
+  /**
+   * Добавление запроса на чтение истории в очередь
+   */
+  function addToHistoryQueue(message) {
+    return new Promise((resolve, reject) => {
+      historyQueue.push({ message, resolve, reject });
+      processHistoryQueue();
+    });
+  }
+
+  /**
+   * Обработка очереди исторических запросов
+   */
+  async function processHistoryQueue() {
+    if (isProcessingHistory || historyQueue.length === 0) return;
+
+    isProcessingHistory = true;
+
+    while (historyQueue.length > 0) {
+      const { message, resolve, reject } = historyQueue.shift();
+
+      try {
+        const historySession = await connectionManager.getHistorySession(plugin.params.data);
+
         const nodesObj = {};
         const nodes = [];
+
         message.data.chanarr.forEach(item => {
           nodesObj[item.chan] = item.id;
           nodes.push(item.chan);
-          
         });
-        
-        const startTime = new Date(message.data.startTime).toISOString();
-        const endTime = new Date(message.data.endTime).toISOString();
-        const result = await session.readHistoryValue(nodes, startTime, endTime);
+
+        const startTime = new Date(message.data.startTime);
+        const endTime = new Date(message.data.endTime);
+
+        plugin.log(`[History] Reading ${nodes.length} nodes from ${startTime.toISOString()} to ${endTime.toISOString()}`, 1);
+
+        const result = await historySession.readHistoryValue(nodes, startTime, endTime);
+
+        // Отправка архивных данных
         nodes.forEach((node, index) => {
-          const data = [];
-          result[index].historyData.dataValues.forEach(item => {
-            const date = new Date(item.sourceTimestamp);
-            data.push({ id: nodesObj[node], value: item.value.value, ts: date.getTime() });
-          });
-          plugin.sendArchive(data);
+          const dataValues = result[index]?.historyData?.dataValues || [];
+          const data = dataValues.map(item => ({
+            id: nodesObj[node],
+            value: item.value.value,
+            ts: new Date(item.sourceTimestamp || item.serverTimestamp).getTime()
+          }));
+          if (data.length > 0) {
+            plugin.sendArchive(data);
+          }
         });
-        plugin.sendResponse(Object.assign({ payload }, message), 1);
+
+        resolve({ success: true, nodesCount: nodes.length });
+
+      } catch (err) {
+        plugin.log(`[History] Error: ${util.inspect(err)}`, 2);
+        reject(err);
       }
-    } catch (e) {
-      plugin.sendResponse(Object.assign({ payload: e }, message), 0);
+    }
+
+    isProcessingHistory = false;
+  }
+
+  async function parseCommand(message) {
+    plugin.log(`Command '${message.command}' received.`, 2);
+
+    if (message.command === 'syncHistory') {
+      try {
+        const result = await addToHistoryQueue(message);
+        plugin.sendResponse(Object.assign({ payload: result }, message), 1);
+      } catch (e) {
+        plugin.log(`History sync command failed: ${util.inspect(e)}`, 2);
+        plugin.sendResponse(Object.assign({ payload: { error: e.message || String(e) } }, message), 0);
+      }
     }
   }
 
